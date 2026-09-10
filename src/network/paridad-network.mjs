@@ -248,6 +248,19 @@ export class ParidadNetwork extends EventEmitter {
     // Framing NDJSON: el stream puede entregar varios mensajes juntos
     // o uno partido en varios eventos "data".
     entry.buffer += data.toString();
+
+    // Nuestros propios mensajes son minusculos (nombres de producto,
+    // shares como string, column-sums). Un buffer que crece sin nunca
+    // encontrar un "\n" es una senal de stream corrupto -- se cierra la
+    // conexion en vez de dejar que el buffer crezca sin techo en
+    // silencio (visto en pruebas reales: memoria creciendo sin ningun
+    // error ni cambio de estado).
+    if (entry.buffer.length > 65536) {
+      this.emit("error", new Error(`Buffer de ${entry.name ?? "peer sin identificar"} excedio el limite sin hallar un mensaje completo, cerrando conexion`));
+      entry.conn.destroy();
+      return;
+    }
+
     let newlineIndex;
     while ((newlineIndex = entry.buffer.indexOf("\n")) !== -1) {
       const line = entry.buffer.slice(0, newlineIndex);

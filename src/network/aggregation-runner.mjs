@@ -53,6 +53,13 @@ export class AggregationRunner extends EventEmitter {
     this.items = null;
     // peer -> Set<nombre de producto>
     this.peerProducts = new Map();
+    // peers a los que ya les anunciamos esta lista de productos: evita
+    // que cada "products" entrante dispare un reanuncio a todos, que a su
+    // vez dispara el mismo reanuncio en los otros dos -- una tormenta de
+    // broadcast sin techo entre 3 nodos en malla completa (visto en
+    // pruebas reales: crecimiento de memoria silencioso, sin logs, tras
+    // llegar a READY_FOR_AGGREGATION).
+    this._announcedTo = new Set();
     // producto -> AggregationSession (rondas en curso)
     this.sessions = new Map();
     // producto -> resultado final
@@ -139,6 +146,8 @@ export class AggregationRunner extends EventEmitter {
     this.sessions.clear();
     this._pendingShares.clear();
     this._pendingColumnSums.clear();
+    // Una reconexion real es la unica razon legitima para re-anunciar.
+    this._announcedTo.clear();
 
     this._announceProducts();
     this._maybeStartSessions();
@@ -147,7 +156,11 @@ export class AggregationRunner extends EventEmitter {
   _announceProducts() {
     if (!this.items) return;
     if (this.net.status !== NETWORK_STATE.READY_FOR_AGGREGATION) return;
-    this.net.broadcast("products", { products: this.items.map((item) => item.product) });
+    const products = this.items.map((item) => item.product);
+    for (const peer of this.net.peers) {
+      if (this._announcedTo.has(peer)) continue;
+      if (this.net.send(peer, "products", { products })) this._announcedTo.add(peer);
+    }
   }
 
   _haveAllPeerLists() {
