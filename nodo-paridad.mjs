@@ -122,6 +122,7 @@ function buildUiState() {
 
   return {
     isMock: false,
+    nodeName: selfName,
     network: {
       status: netState.status,
       identifiedPeers: netState.identifiedPeers,

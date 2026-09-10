@@ -3,7 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Paridad</title>
+    <title>Paridad — Resumen</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,650&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -11,81 +17,117 @@
       DATOS DE PRUEBA (MOCK) &mdash; todavia no conectado a la red ni a QVAC
     </div>
 
-    <header class="header">
-      <h1>PARIDAD</h1>
-      <p class="tagline">Benchmark de precios entre negocios, sin revelar lo que pagas.</p>
-    </header>
-
-    <main class="dashboard">
-      <section class="status-grid" aria-label="Estado del sistema">
-        <div class="stat-tile" id="stat-peers">
-          <span class="stat-label">PEERS</span>
-          <span class="stat-value" id="val-peers">&mdash;</span>
+    <div id="app">
+      <header>
+        <div class="brand-block">
+          <div class="brand">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+              <circle cx="6" cy="18" r="2.4" fill="currentColor" />
+              <circle cx="18" cy="18" r="2.4" fill="currentColor" />
+              <circle cx="12" cy="6" r="2.4" fill="currentColor" />
+              <line x1="6" y1="18" x2="18" y2="18" stroke="currentColor" stroke-width="1.6" />
+              <line x1="6" y1="18" x2="12" y2="6" stroke="currentColor" stroke-width="1.6" />
+              <line x1="18" y1="18" x2="12" y2="6" stroke="currentColor" stroke-width="1.6" />
+            </svg>
+            Paridad
+          </div>
+          <div class="brand-sub" id="node-label">&mdash;</div>
         </div>
-        <div class="stat-tile" id="stat-p2p">
-          <span class="stat-label">P2P</span>
-          <span class="stat-value" id="val-p2p">&mdash;</span>
+
+        <div class="header-right">
+          <span class="sync-text" id="sync-text">&mdash;</span>
+          <div class="avatar-circle" id="avatar">&mdash;</div>
         </div>
-        <div class="stat-tile" id="stat-internet">
-          <span class="stat-label">INTERNET</span>
-          <span class="stat-value" id="val-internet">&mdash;</span>
+      </header>
+
+      <div class="main-grid">
+        <div class="col-left">
+          <section class="panel" aria-label="Tus compras frente al grupo">
+            <h2 class="panel-title">Tus compras frente al grupo</h2>
+            <p class="panel-sub">
+              Comparado con el promedio anonimo del grupo &mdash; nadie ve el precio de nadie
+            </p>
+
+            <div class="rows" id="product-rows">
+              <div class="row">
+                <span class="row-rank">01</span>
+                <span class="row-name"><span class="prod-name">Sin datos</span></span>
+              </div>
+            </div>
+
+            <div class="invoice-drop">
+              <span id="invoice-filename">Ninguna factura cargada</span>
+              <button type="button" disabled>Subir factura (pipeline QVAC en otra rama)</button>
+            </div>
+          </section>
+
+          <div class="kpi-row">
+            <div class="kpi-card">
+              <div class="kpi-label">Promedio del grupo</div>
+              <div class="kpi-value accent" id="kpi-average">&mdash;</div>
+              <div class="kpi-sub">por unidad, calculado sin servidor central</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Tu posicion</div>
+              <div class="kpi-value" id="kpi-position">&mdash;</div>
+              <div class="kpi-sub">frente al promedio del grupo</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Participantes</div>
+              <div class="kpi-value" id="kpi-participants">&mdash;</div>
+              <div class="kpi-sub">negocios en esta ronda</div>
+            </div>
+          </div>
         </div>
-        <div class="stat-tile" id="stat-local-ai">
-          <span class="stat-label">LOCAL AI</span>
-          <span class="stat-value" id="val-local-ai">&mdash;</span>
+
+        <div class="col-right">
+          <div class="col-right-label">Estado del nodo</div>
+
+          <section class="panel status-panel" aria-label="Estado del sistema">
+            <div class="status-row">
+              <span class="status-label">P2P</span>
+              <span class="status-value" id="st-p2p">&mdash;</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Peers</span>
+              <span class="status-value" id="st-peers">&mdash;</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">IA local</span>
+              <span class="status-value" id="st-ai">&mdash;</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Internet</span>
+              <span class="status-value" id="st-internet">&mdash;</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Shares enviados</span>
+              <span class="status-value" id="st-shares">&mdash;</span>
+            </div>
+          </section>
+
+          <section class="panel" aria-label="Privacidad">
+            <p class="privacy-note" id="privacy-note">&mdash;</p>
+          </section>
+
+          <a class="opt-card" href="calculadora.html">
+            <div class="opt-icon copper">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="5" y="3" width="14" height="18" rx="2" />
+                <line x1="8" y1="7" x2="16" y2="7" />
+                <line x1="8" y1="11" x2="8.01" y2="11" />
+                <line x1="12" y1="11" x2="12.01" y2="11" />
+                <line x1="16" y1="11" x2="16.01" y2="11" />
+                <line x1="8" y1="15" x2="8.01" y2="15" />
+                <line x1="12" y1="15" x2="12.01" y2="15" />
+                <line x1="16" y1="15" x2="16.01" y2="15" />
+              </svg>
+            </div>
+            <div class="opt-label">Calculadora de ahorro</div>
+          </a>
         </div>
-        <div class="stat-tile" id="stat-shared">
-          <span class="stat-label">SHARES ENVIADOS</span>
-          <span class="stat-value" id="val-shared">&mdash;</span>
-        </div>
-      </section>
-
-      <section class="panel privacy-panel">
-        <h2>Privacidad</h2>
-        <p id="privacy-note">&mdash;</p>
-      </section>
-
-      <section class="panel invoice-panel">
-        <h2>Factura</h2>
-        <div class="invoice-drop" id="invoice-drop">
-          <span id="invoice-filename">Ningun archivo cargado</span>
-          <button type="button" id="invoice-upload-btn" disabled>
-            Subir factura (no conectado aun)
-          </button>
-        </div>
-        <table class="invoice-items">
-          <thead>
-            <tr>
-              <th>Producto</th>
-              <th>Cantidad</th>
-              <th>Precio unitario</th>
-            </tr>
-          </thead>
-          <tbody id="invoice-items-body">
-            <tr>
-              <td colspan="3">Sin datos</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section class="panel benchmark-panel">
-        <h2>Resultado del benchmark</h2>
-        <dl class="benchmark-grid">
-          <dt>Tu precio</dt>
-          <dd id="bm-your-price">&mdash;</dd>
-
-          <dt>Promedio del grupo</dt>
-          <dd id="bm-group-average">&mdash;</dd>
-
-          <dt>Tu posicion</dt>
-          <dd id="bm-position">&mdash;</dd>
-
-          <dt>Participantes</dt>
-          <dd id="bm-participants">&mdash;</dd>
-        </dl>
-      </section>
-    </main>
+      </div>
+    </div>
 
     <script type="module" src="app.js"></script>
   </body>

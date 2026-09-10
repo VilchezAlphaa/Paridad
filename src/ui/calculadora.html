@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paridad — Calculadora de ahorro</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,650&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      /* Estilos propios de la calculadora (adaptados del mockup
+         paridad-calculadora.html; el resto viene de styles.css). */
+      .page {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 30px 28px 60px;
+      }
+
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.85rem;
+        color: var(--ink-soft);
+        margin-bottom: 18px;
+      }
+
+      .back-link:hover {
+        color: var(--ink);
+      }
+
+      h1 {
+        font-family: "Fraunces", serif;
+        font-weight: 600;
+        font-size: 1.9rem;
+        margin: 0 0 6px;
+      }
+
+      .page-sub {
+        font-size: 0.95rem;
+        color: var(--ink-soft);
+        margin: 0 0 28px;
+        max-width: 520px;
+        line-height: 1.5;
+      }
+
+      .field-block {
+        margin-bottom: 22px;
+      }
+
+      .field-label {
+        display: block;
+        font-size: 0.82rem;
+        color: var(--ink-soft);
+        margin-bottom: 8px;
+      }
+
+      input[type="number"] {
+        font-family: "IBM Plex Sans", sans-serif;
+        font-size: 0.95rem;
+        color: var(--ink);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 11px 14px;
+        width: 140px;
+      }
+
+      .current-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px 20px;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+
+      .current-card .lbl {
+        font-size: 0.85rem;
+        color: var(--ink-soft);
+      }
+
+      .current-card .val {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 1.3rem;
+        font-weight: 600;
+      }
+
+      .current-card.group {
+        background: var(--teal-soft);
+        border-color: var(--teal-dark);
+        margin-bottom: 26px;
+      }
+
+      .results {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 14px;
+      }
+
+      .result-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px 20px;
+      }
+
+      .result-card.highlight {
+        background: var(--good-soft);
+        border-color: var(--good);
+      }
+
+      .result-card.highlight.negative {
+        background: var(--over-soft);
+        border-color: var(--over);
+      }
+
+      .result-label {
+        font-size: 0.8rem;
+        color: var(--ink-soft);
+        margin-bottom: 8px;
+      }
+
+      .result-value {
+        font-family: "Fraunces", serif;
+        font-weight: 600;
+        font-size: 1.7rem;
+      }
+
+      .result-card.highlight .result-value {
+        color: var(--good);
+      }
+
+      .result-card.highlight.negative .result-value {
+        color: var(--over);
+      }
+
+      .privacy-footnote {
+        margin-top: 26px;
+        font-size: 0.78rem;
+        color: var(--ink-faint);
+        line-height: 1.5;
+        max-width: 520px;
+      }
+
+      @media (max-width: 640px) {
+        .results {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="mock-banner" class="mock-banner" hidden>
+      DATOS DE PRUEBA (MOCK) &mdash; todavia no conectado a la red ni a QVAC
+    </div>
+
+    <div class="page">
+      <a href="./" class="back-link">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+        Volver al resumen
+      </a>
+
+      <h1>Calculadora de ahorro</h1>
+      <p class="page-sub">
+        Elige una cantidad para ver cuánto pagarías si tu precio fuera el promedio del grupo, y
+        cuánto ahorrarías frente a lo que pagas ahora.
+      </p>
+
+      <div class="current-card">
+        <span class="lbl" id="product-label">Lo que pagas actualmente, por unidad</span>
+        <span class="val" id="current-price">—</span>
+      </div>
+
+      <div class="current-card group">
+        <span class="lbl" id="group-label">Promedio del grupo, por unidad</span>
+        <span class="val" id="group-price">—</span>
+      </div>
+
+      <div class="field-block">
+        <label class="field-label" for="qty-input">Cantidad a comprar</label>
+        <input type="number" id="qty-input" min="1" value="10" />
+      </div>
+
+      <div class="results">
+        <div class="result-card">
+          <div class="result-label">Total pagando lo de siempre</div>
+          <div class="result-value" id="total-current">—</div>
+        </div>
+        <div class="result-card">
+          <div class="result-label">Total al precio promedio</div>
+          <div class="result-value" id="total-group">—</div>
+        </div>
+        <div class="result-card highlight" id="savings-card">
+          <div class="result-label" id="savings-label">Ahorrarías</div>
+          <div class="result-value" id="savings-value">—</div>
+        </div>
+      </div>
+
+      <p class="privacy-footnote">
+        El promedio se calcula entre todos los participantes con secret sharing: nadie —ni esta
+        app— conoce el precio individual de otro negocio, solo el agregado del grupo.
+      </p>
+    </div>
+
+    <script type="module">
+      // La calculadora compara contra el PROMEDIO DEL GRUPO (el unico dato
+      // agregado que Paridad conoce). El mockup original comparaba contra
+      // proveedores con nombre; eso revelaria precios individuales y va en
+      // contra del modelo de privacidad, asi que aqui no existe.
+      import { mockDataSource } from "./mock-data.js";
+      import { realDataSource, isServedByParidadNode } from "./real-data-source.js";
+
+      const $ = (id) => document.getElementById(id);
+      const fmt = (n) => (typeof n === "number" ? `$${n.toFixed(2)}` : "—");
+
+      let unitPrice = null;
+      let groupAverage = null;
+
+      function recalculate() {
+        const qty = Math.max(1, parseInt($("qty-input").value, 10) || 1);
+
+        $("current-price").textContent = fmt(unitPrice);
+        $("group-price").textContent = fmt(groupAverage);
+
+        if (typeof unitPrice !== "number" || typeof groupAverage !== "number") {
+          $("total-current").textContent = fmt(typeof unitPrice === "number" ? unitPrice * qty : null);
+          $("total-group").textContent = "—";
+          $("savings-label").textContent = "Esperando ronda";
+          $("savings-value").textContent = "—";
+          return;
+        }
+
+        const totalCurrent = unitPrice * qty;
+        const totalGroup = groupAverage * qty;
+        const savings = totalCurrent - totalGroup;
+
+        $("total-current").textContent = fmt(totalCurrent);
+        $("total-group").textContent = fmt(totalGroup);
+
+        if (savings >= 0) {
+          $("savings-label").textContent = "Ahorrarías al precio promedio";
+          $("savings-value").textContent = fmt(savings);
+          $("savings-card").classList.remove("negative");
+        } else {
+          $("savings-label").textContent = "Ya pagas menos que el grupo";
+          $("savings-value").textContent = fmt(Math.abs(savings));
+          $("savings-card").classList.add("negative");
+        }
+      }
+
+      function onState(state) {
+        $("mock-banner").hidden = !state.isMock;
+
+        const item = state.invoice.items[0];
+        if (item) {
+          $("product-label").textContent = `${item.product} — lo que pagas por unidad`;
+          unitPrice = typeof item.unitPrice === "number" ? item.unitPrice : null;
+        }
+        groupAverage =
+          typeof state.benchmark.groupAverage === "number" ? state.benchmark.groupAverage : null;
+
+        recalculate();
+      }
+
+      $("qty-input").addEventListener("input", recalculate);
+
+      const dataSource = (await isServedByParidadNode()) ? realDataSource : mockDataSource;
+      dataSource.subscribe(onState);
+    </script>
+  </body>
+</html>

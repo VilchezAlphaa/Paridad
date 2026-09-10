@@ -11,6 +11,7 @@ import { NETWORK_STATE } from "../network/network-state.mjs";
 
 const MOCK_STATE = Object.freeze({
   isMock: true,
+  nodeName: "A",
 
   network: {
     status: NETWORK_STATE.READY_FOR_AGGREGATION,
