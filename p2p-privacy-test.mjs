@@ -9,6 +9,7 @@
  * El protocolo de cable no cambió: mismos mensajes, mismo topic.
  *
  * Uso:  node p2p-privacy-test.mjs A|B|C
+ *        node p2p-privacy-test.mjs A --bootstrap 127.0.0.1:49738
  */
 
 import { PARTICIPANTS } from "./src/privacy/aggregation-protocol.mjs";
@@ -36,9 +37,19 @@ if (!PARTICIPANTS.includes(nodeName)) {
 
 const myPrice = DEMO_PRICES[nodeName];
 
-const nodo = createAggregationNode({ nodeName, privateValue: myPrice });
+// Sin --bootstrap se usa el DHT publico, igual que siempre.
+const iBootstrap = process.argv.indexOf("--bootstrap");
+const bootstrap =
+  iBootstrap === -1
+    ? []
+    : (process.argv[iBootstrap + 1] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+
+const nodo = createAggregationNode({ nodeName, privateValue: myPrice, bootstrap });
 
 console.log(`\n🟢 Nodo ${nodeName} — Paridad (spike de agregación privada)`);
+console.log(
+  `Descubrimiento: ${nodo.modoDescubrimiento}${bootstrap.length ? ` (${bootstrap.join(", ")})` : ""}`
+);
 console.log(`Precio local [DATO SINTÉTICO DE DEMO] (nunca sale de este proceso): ${myPrice}`);
 console.log(
   "Shares generados para repartir (uno por peer, nunca todos al mismo peer):",
@@ -59,7 +70,11 @@ async function shutdown(reason, exitCode = 0) {
 
   const forceExit = setTimeout(() => {
     console.error(`⚠️  Nodo ${nodeName}: el cierre del swarm tardó demasiado, forzando salida`);
-    process.exit(exitCode || 1);
+    // Se sale con el codigo que corresponde al desenlace real, NO con 1.
+    // Un cierre lento no convierte en fallo una ronda que si se completo:
+    // cuando los tres nodos terminan a la vez se resetean las conexiones
+    // mutuamente y swarm.destroy() puede no cerrar dentro del margen.
+    process.exit(exitCode);
   }, 5000);
   forceExit.unref();
 

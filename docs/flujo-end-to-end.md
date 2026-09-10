@@ -53,10 +53,13 @@ Tu posición:     +8.5% vs. el promedio
 
 Opciones útiles:
 
+- `--bootstrap <host:puerto>` — usa un DHT privado con bootstrap local en vez
+  del DHT público. Ver `docs/bootstrap-local.md`.
 - `--precio-cents <n>` — salta QVAC y usa un precio dado. Sirve para probar la
   capa P2P sin cargar modelos; no es el flujo real.
 - `--esperado <n>` — falla si la extracción no da ese valor. Lo usa el test.
 - `--timeout <ms>` — cierra la ronda como incompleta en vez de esperar siempre.
+- `--gracia <ms>` — cuánto sigue vivo el nodo tras cerrar la ronda.
 - `--topic <nombre>` — aísla una ronda de otras.
 
 ## Qué viaja por la red y qué no
@@ -116,9 +119,10 @@ node src/e2e/test-end-to-end.mjs --solo-p2p
   en el `hello` y solo se comprueba que sea uno de los participantes esperados
   y que no esté duplicada. Cualquiera que conozca el topic puede presentarse
   como un participante que aún no se ha conectado.
-- **El descubrimiento por DHT necesita internet.** El objetivo de operar solo en
-  red local (CLAUDE.md §14) NO está implementado todavía: Hyperswarm usa los
-  bootstrap públicos. No se debe afirmar que funciona sin internet hasta
-  haberlo verificado con un bootstrap local.
+- **El descubrimiento por DHT público necesita internet.** Ya existe una
+  alternativa: `--bootstrap host:puerto` levanta un DHT privado contra un nodo
+  bootstrap propio, y con él los participantes se encuentran en una red local
+  sin tocar la red pública. Ver `docs/bootstrap-local.md`. Sigue haciendo falta
+  conectividad IP entre las máquinas: **no es "completamente offline"**.
 - **Tres OCR en GPU a la vez no caben** en la máquina de desarrollo; ver
   `docs/pipeline-extraccion.md`.

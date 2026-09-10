@@ -45,6 +45,13 @@ const esperado = opcion("--esperado");
 const timeoutMs = Number(opcion("--timeout") ?? 0);
 const topicName = opcion("--topic") ?? TOPIC_POR_DEFECTO;
 
+// --bootstrap host:puerto[,host:puerto]
+// Sin este flag el nodo usa el DHT público, como hasta ahora.
+const bootstrap = (opcion("--bootstrap") ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 if (!PARTICIPANTS.includes(nodeName) || (!rutaFactura && !precioCentsDirecto)) {
   console.error(
     `Uso: node paridad-node.mjs <${PARTICIPANTS.join("|")}> <ruta-factura.png>\n` +
@@ -124,7 +131,11 @@ async function apagar(motivo, exitCode = 0) {
 
   const forzar = setTimeout(() => {
     console.error(`⚠️  Nodo ${nodeName}: el cierre tardó demasiado, forzando salida`);
-    process.exit(exitCode || 1);
+    // Se sale con el codigo que corresponde al desenlace real, NO con 1.
+    // Un cierre lento no convierte en fallo una ronda que si se completo:
+    // cuando los tres nodos terminan a la vez se resetean las conexiones
+    // mutuamente y swarm.destroy() puede no cerrar dentro del margen.
+    process.exit(exitCode);
   }, 5000);
   forzar.unref();
 
@@ -164,9 +175,13 @@ try {
     privateValue: BigInt(precioCents),
     topicName,
     timeoutMs,
+    bootstrap,
   });
 
   console.log(`\n🟢 Nodo ${nodeName} — Paridad end-to-end`);
+  console.log(
+    `Descubrimiento: ${nodo.modoDescubrimiento}${bootstrap.length ? ` (${bootstrap.join(", ")})` : ""}`
+  );
   console.log(`Precio local (nunca sale de este proceso): ${precioCents} centavos`);
   console.log(
     "Shares generados para repartir (uno por peer, nunca todos al mismo peer):",
@@ -202,6 +217,9 @@ try {
     motivo: resultado.motivo ?? null,
   })}`);
 
+  const conexionesAlCerrarRonda = nodo.peersConectados();
+  console.log(`\n🔗 Peers conectados al cerrar la ronda: ${conexionesAlCerrarRonda.join(", ") || "ninguno"}`);
+
   // Margen de cortesía antes de cerrar el swarm.
   //
   // Un nodo termina en cuanto recibe las sumas parciales de los demás, pero sus
@@ -209,10 +227,25 @@ try {
   // Destruir el swarm de inmediato dejaría al peer más lento esperando un
   // mensaje que ya no va a llegar. En el spike anterior esto no pasaba porque
   // el proceso se quedaba vivo hasta Ctrl+C.
+  //
+  // Con --gracia alto sirve además para observar si las conexiones P2P
+  // sobreviven a que el bootstrap desaparezca: se vuelve a mirar al final.
   const graciaMs = Number(opcion("--gracia") ?? 3000);
   if (resultado.completo && graciaMs > 0) {
     await new Promise((r) => setTimeout(r, graciaMs));
   }
+
+  const conexionesTrasGracia = nodo.peersConectados();
+  if (graciaMs >= 5000) {
+    console.log(`🔗 Peers conectados tras esperar ${graciaMs} ms: ${conexionesTrasGracia.join(", ") || "ninguno"}`);
+  }
+
+  console.log(`PARIDAD_CONEXIONES ${JSON.stringify({
+    modoDescubrimiento: nodo.modoDescubrimiento,
+    alCerrarRonda: conexionesAlCerrarRonda,
+    trasGracia: conexionesTrasGracia,
+    graciaMs,
+  })}`);
 
   await apagar(resultado.completo ? "ronda completada" : "ronda incompleta", 0);
 } catch (err) {

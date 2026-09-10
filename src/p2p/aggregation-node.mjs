@@ -18,6 +18,7 @@
  */
 
 import Hyperswarm from "hyperswarm";
+import DHT from "hyperdht";
 import crypto from "crypto";
 import {
   PARTICIPANTS,
@@ -57,6 +58,10 @@ export function mensajeFiltraValor(mensaje, valorPrivado) {
  * @param {number}   timeoutMs     0 = esperar indefinidamente. Si se agota antes
  *                                 de completar la ronda, se resuelve como ronda
  *                                 incompleta en vez de quedarse colgado.
+ * @param {string[]} bootstrap     lista de "host:puerto" de nodos bootstrap.
+ *                                 Vacío/null = DHT público (comportamiento
+ *                                 actual). Con valores, el nodo se une a un DHT
+ *                                 privado y NO consulta la red pública.
  * @param {object}   log           destino de los mensajes legibles.
  */
 export function createAggregationNode({
@@ -65,6 +70,7 @@ export function createAggregationNode({
   participants = PARTICIPANTS,
   topicName = TOPIC_POR_DEFECTO,
   timeoutMs = 0,
+  bootstrap = null,
   log = console,
 }) {
   if (!participants.includes(nodeName)) {
@@ -76,7 +82,30 @@ export function createAggregationNode({
   const session = new AggregationSession(nodeName, participants);
   session.recordOwnShare(misShares[nodeName]);
 
-  const swarm = new Hyperswarm();
+  // --- Descubrimiento -------------------------------------------------------
+  // Sin `bootstrap` se mantiene exactamente el comportamiento de siempre:
+  // Hyperswarm construye su propio DHT contra los bootstrap públicos.
+  //
+  // Con `bootstrap`, se construye el DHT a mano para poder apuntarlo a un
+  // bootstrap local. Se hace con `new DHT(...)` y no con las opciones de
+  // Hyperswarm porque un DHT privado de 3-4 nodos necesita además
+  // `ephemeral: false` y `firewalled: false` (es el mismo patrón que usa el
+  // helper de testnet de hyperdht): en una red tan pequeña los nodos efímeros
+  // no sostienen los anuncios del topic.
+  //
+  // hyperdht resuelve `opts.bootstrap || BOOTSTRAP_NODES`, así que una lista no
+  // vacía impide cualquier consulta a la red pública: si el bootstrap local no
+  // responde, el nodo NO se cae silenciosamente al DHT público, simplemente no
+  // encuentra a nadie.
+  const usaBootstrapLocal = Array.isArray(bootstrap) && bootstrap.length > 0;
+  const modoDescubrimiento = usaBootstrapLocal ? "bootstrap-local" : "dht-publico";
+
+  const swarm = usaBootstrapLocal
+    ? new Hyperswarm({
+        dht: new DHT({ bootstrap, ephemeral: false, firewalled: false }),
+      })
+    : new Hyperswarm();
+
   const topic = crypto.createHash("sha256").update(topicName).digest();
 
   // remotePublicKey (hex) -> nombre de nodo, una vez confirmado por "hello".
@@ -90,6 +119,8 @@ export function createAggregationNode({
   let columnSumBroadcast = false;
   let rondaCerrada = false;
   let temporizador = null;
+  let descubrimiento = null;
+  let refresco = null;
 
   let resolverResultado;
   const resultado = new Promise((resolve) => {
@@ -291,6 +322,12 @@ export function createAggregationNode({
     nodeName,
     misShares,
     resultado,
+    modoDescubrimiento,
+
+    /** Peers con conexión P2P confirmada en este instante. */
+    peersConectados() {
+      return [...connectionByNode.keys()].sort();
+    },
 
     /** Resumen auditable de todo lo que este nodo puso en la red. */
     auditoria() {
@@ -308,7 +345,32 @@ export function createAggregationNode({
         log.warn(`⚠️  Nodo ${nodeName}: error del swarm: ${err.message}`);
       });
       swarm.on("connection", alConectar);
-      swarm.join(topic, { client: true, server: true });
+      descubrimiento = swarm.join(topic, { client: true, server: true });
+
+      // Refresco activo del descubrimiento hasta que la malla esté completa.
+      //
+      // Hyperswarm solo vuelve a consultar el DHT cada ~10 min (REFRESH_INTERVAL
+      // más un jitter de 2 min). En el DHT público eso da igual: los anuncios
+      // están ampliamente replicados y la primera consulta ya encuentra a todos.
+      // En un DHT privado de 4 nodos NO: quien consulta antes de que otro se
+      // haya anunciado no lo vuelve a ver hasta el refresco periódico, y la
+      // malla se queda en estrella (A ve a B y C, pero B y C no se ven entre sí)
+      // y la ronda nunca cierra.
+      //
+      // Esto es descubrimiento, no protocolo: no cambia qué se envía ni a quién.
+      const faltanPeers = () => connectionByNode.size < participants.length - 1;
+
+      refresco = setInterval(() => {
+        if (rondaCerrada || !faltanPeers()) {
+          clearInterval(refresco);
+          refresco = null;
+          return;
+        }
+        descubrimiento.refresh({ client: true, server: true }).catch(() => {
+          // Un refresco fallido no es fatal: se reintenta en el siguiente tick.
+        });
+      }, 3000);
+      refresco.unref();
 
       if (timeoutMs > 0) {
         temporizador = setTimeout(() => rondaIncompleta(`sin completar tras ${timeoutMs} ms`), timeoutMs);
@@ -320,6 +382,7 @@ export function createAggregationNode({
 
     async stop() {
       if (temporizador) clearTimeout(temporizador);
+      if (refresco) clearInterval(refresco);
       await swarm.destroy();
     },
   };
