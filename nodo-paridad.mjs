@@ -40,6 +40,18 @@ if (!PARTICIPANTS.includes(selfName)) {
 const priceCents = argValue("--price");
 const product = argValue("--product") ?? "Producto de demo";
 const quantity = Number(argValue("--quantity") ?? 1);
+
+// Productos adicionales SOLO para mostrar en la lista "Lo que mas
+// compras" como "en cola" (cada ronda cubre un producto; estos esperan
+// la suya). Formato: --queue "Nombre:centavos:cantidad", repetible.
+// Cuando el pipeline QVAC este integrado, esta lista saldra de las
+// facturas detectadas, no de argumentos.
+const queuedItems = rest
+  .flatMap((arg, index) => (arg === "--queue" && rest[index + 1] ? [rest[index + 1]] : []))
+  .map((spec) => {
+    const [name, cents, qty] = spec.split(":");
+    return { product: name, quantity: Number(qty ?? 1), unitPrice: Number(cents) / 100 };
+  });
 const port = Number(argValue("--port") ?? 4700);
 const topicSeed = argValue("--topic");
 const bootstrapJson = argValue("--bootstrap");
@@ -136,9 +148,10 @@ function buildUiState() {
     },
     invoice: {
       // El pipeline QVAC (factura -> OCR -> JSON) vive en otra rama; por
-      // ahora el item viene de los argumentos de arranque del nodo.
+      // ahora los items vienen de los argumentos de arranque del nodo.
+      // Solo el primero participa en la ronda actual.
       fileName: null,
-      items: [{ product, quantity, unitPrice: Number(priceCents) / 100 }],
+      items: [{ product, quantity, unitPrice: Number(priceCents) / 100 }, ...queuedItems],
     },
     benchmark: {
       yourPrice: Number(priceCents) / 100,

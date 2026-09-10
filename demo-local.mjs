@@ -15,7 +15,14 @@ import createTestnet from "hyperdht/testnet.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const nodePath = path.join(__dirname, "nodo-paridad.mjs");
 
-// Precios sinteticos de demo, mismos que p2p-privacy-test.mjs.
+// Precios sinteticos de demo, mismos que p2p-privacy-test.mjs. Los
+// "queue" son productos en cola (solo display) para llenar el top-5.
+const QUEUE = [
+  "Filtro de aceite:680:12",
+  "Pastillas de freno delanteras:2850:6",
+  "Bateria 12V 650A:7800:2",
+  "Bujias de encendido (juego x4):1640:8",
+];
 const NODES = [
   { name: "A", price: "4700", port: 4700, product: "Aceite Motor 20W50", quantity: "4" },
   { name: "B", price: "3100", port: 4701, product: "Aceite Motor 20W50", quantity: "2" },
@@ -39,6 +46,7 @@ const children = NODES.map(({ name, price, port, product, quantity }) => {
       "--port", String(port),
       "--topic", topicSeed,
       "--bootstrap", bootstrapJson,
+      ...QUEUE.flatMap((item) => ["--queue", item]),
     ],
     { stdio: ["ignore", "pipe", "pipe"] }
   );

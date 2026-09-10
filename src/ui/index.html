@@ -65,11 +65,13 @@
 
       <div class="main-grid">
         <div class="col-left">
-          <section class="panel" aria-label="Tus compras frente al grupo">
-            <h2 class="panel-title">Tus compras frente al grupo</h2>
-            <p class="panel-sub">
-              Comparado con el promedio anonimo del grupo &mdash; nadie ve el precio de nadie
-            </p>
+          <section class="panel top5-panel" aria-label="Lo que mas compras">
+            <div class="panel-heading">
+              <h2 class="panel-title">Lo que más compras</h2>
+              <p class="panel-sub">
+                Comparado con el promedio anonimo del grupo &mdash; nadie ve el precio de nadie
+              </p>
+            </div>
 
             <div class="rows" id="product-rows">
               <div class="row">
@@ -78,10 +80,13 @@
               </div>
             </div>
 
-            <div class="invoice-drop">
-              <span id="invoice-filename">Ninguna factura cargada</span>
-              <button type="button" disabled>Subir factura (pipeline QVAC en otra rama)</button>
-            </div>
+            <p class="auto-detect-note">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3.2" />
+                <path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" />
+              </svg>
+              La IA local detecta sola las facturas que guardes en tu carpeta &mdash; nada se sube a la nube
+            </p>
           </section>
 
           <div class="kpi-row">

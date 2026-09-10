@@ -38,11 +38,16 @@ const MOCK_STATE = Object.freeze({
 
   invoice: {
     // No hay pipeline de OCR conectado todavia (ver decision del equipo:
-    // esa parte quedo fuera de esta rama). Este bloque es un placeholder
-    // visual para donde ira la factura una vez que exista esa fuente real.
+    // esa parte quedo fuera de esta rama). Top-5 de ejemplo para disenar
+    // la lista; en la fuente real solo el primer item tiene benchmark
+    // (un producto por ronda) y los demas quedan "en cola".
     fileName: null,
     items: [
-      { product: "Aceite Motor 20W50", quantity: 4, unitPrice: "hidden" },
+      { product: "Aceite Motor 20W50", quantity: 4, unitPrice: 47.0 },
+      { product: "Filtro de aceite", quantity: 12, unitPrice: 6.8 },
+      { product: "Pastillas de freno delanteras", quantity: 6, unitPrice: 28.5 },
+      { product: "Bateria 12V 650A", quantity: 2, unitPrice: 78.0 },
+      { product: "Bujias de encendido (juego x4)", quantity: 8, unitPrice: 16.4 },
     ],
   },
 

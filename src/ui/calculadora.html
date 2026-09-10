@@ -71,8 +71,10 @@
       }
 
       .current-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.78);
+        backdrop-filter: blur(14px) saturate(1.15);
+        -webkit-backdrop-filter: blur(14px) saturate(1.15);
+        border: 1px solid rgba(226, 220, 203, 0.85);
         border-radius: 16px;
         box-shadow: var(--shadow);
         padding: 20px 26px;
@@ -96,7 +98,7 @@
       }
 
       .current-card.group {
-        background: var(--teal-soft);
+        background: rgba(222, 233, 232, 0.82);
         border-color: var(--teal-dark);
         margin-bottom: 26px;
       }
@@ -108,20 +110,22 @@
       }
 
       .result-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.78);
+        backdrop-filter: blur(14px) saturate(1.15);
+        -webkit-backdrop-filter: blur(14px) saturate(1.15);
+        border: 1px solid rgba(226, 220, 203, 0.85);
         border-radius: 16px;
         box-shadow: var(--shadow);
         padding: 24px 26px;
       }
 
       .result-card.highlight {
-        background: var(--good-soft);
+        background: rgba(225, 235, 225, 0.85);
         border-color: var(--good);
       }
 
       .result-card.highlight.negative {
-        background: var(--over-soft);
+        background: rgba(243, 224, 219, 0.85);
         border-color: var(--over);
       }
 
@@ -148,9 +152,14 @@
       .privacy-footnote {
         margin-top: 26px;
         font-size: 0.78rem;
-        color: var(--ink-faint);
+        color: var(--ink-soft);
         line-height: 1.5;
-        max-width: 520px;
+        max-width: 560px;
+        background: rgba(255, 255, 255, 0.65);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-radius: 10px;
+        padding: 10px 14px;
       }
 
       @media (max-width: 640px) {

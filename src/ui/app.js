@@ -73,7 +73,12 @@ function renderProducts(state) {
   }
 
   items.forEach((item, index) => {
-    const verdict = verdictFor(state.benchmark.yourPositionPercent);
+    // Una ronda cubre UN producto: solo el primero de la lista tiene
+    // benchmark; los demas esperan su propia ronda ("en cola").
+    const isBenchmarked = index === 0;
+    const verdict = isBenchmarked
+      ? verdictFor(state.benchmark.yourPositionPercent)
+      : { className: "", label: "En cola", detail: "esperando su ronda" };
 
     const row = document.createElement("div");
     row.className = `row${verdict.className ? ` row-${verdict.className}` : ""}`;
@@ -89,7 +94,7 @@ function renderProducts(state) {
     chip.textContent = item.product.slice(0, 3);
     const prodName = document.createElement("span");
     prodName.className = "prod-name";
-    prodName.textContent = `${item.product} ×${item.quantity}`;
+    prodName.textContent = item.product;
     nameWrap.append(chip, prodName);
 
     const yourPrice = document.createElement("span");
@@ -100,7 +105,7 @@ function renderProducts(state) {
     const groupPrice = document.createElement("span");
     groupPrice.className = "price";
     groupPrice.innerHTML = `<span class="lbl">Promedio del grupo</span>`;
-    groupPrice.append(formatPrice(state.benchmark.groupAverage));
+    groupPrice.append(isBenchmarked ? formatPrice(state.benchmark.groupAverage) : "—");
 
     const verdictEl = document.createElement("span");
     verdictEl.className = `verdict${verdict.className ? ` ${verdict.className}` : ""}`;
@@ -111,8 +116,6 @@ function renderProducts(state) {
     row.append(rank, nameWrap, yourPrice, groupPrice, verdictEl);
     rows.append(row);
   });
-
-  $("invoice-filename").textContent = state.invoice.fileName ?? "Ninguna factura cargada";
 }
 
 function renderKpis(state) {
