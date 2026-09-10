@@ -169,6 +169,10 @@ const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".mjs": "text/javascript; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".avif": "image/avif",
+  ".svg": "image/svg+xml",
 };
 
 const sseClients = new Set();
