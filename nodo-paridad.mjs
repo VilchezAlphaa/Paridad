@@ -41,24 +41,40 @@ const priceCents = argValue("--price");
 const product = argValue("--product") ?? "Producto de demo";
 const quantity = Number(argValue("--quantity") ?? 1);
 
-// Productos adicionales SOLO para mostrar en la lista "Lo que mas
-// compras" como "en cola" (cada ronda cubre un producto; estos esperan
-// la suya). Formato: --queue "Nombre:centavos:cantidad", repetible.
-// Cuando el pipeline QVAC este integrado, esta lista saldra de las
-// facturas detectadas, no de argumentos.
-const queuedItems = rest
-  .flatMap((arg, index) => (arg === "--queue" && rest[index + 1] ? [rest[index + 1]] : []))
-  .map((spec) => {
-    const [name, cents, qty] = spec.split(":");
-    return { product: name, quantity: Number(qty ?? 1), unitPrice: Number(cents) / 100 };
-  });
+// Items locales. Cada uno corre SU PROPIA ronda P2P (multi-producto).
+// Formato: --item "Nombre:centavos:cantidad[:Proveedor]", repetible
+// (--queue se acepta como alias por compatibilidad). Si no hay --item,
+// se usa el trio --product/--price/--quantity como unico item. Cuando
+// el pipeline QVAC este integrado, esta lista saldra de las facturas.
+const itemSpecs = rest.flatMap((arg, index) =>
+  (arg === "--item" || arg === "--queue") && rest[index + 1] ? [rest[index + 1]] : []
+);
+
+function parseItemSpec(spec) {
+  const [name, cents, qty, proveedor] = spec.split(":");
+  return {
+    product: name,
+    priceCents: BigInt(cents),
+    quantity: Number(qty ?? 1),
+    proveedor: proveedor ?? null,
+  };
+}
 const port = Number(argValue("--port") ?? 4700);
 const topicSeed = argValue("--topic");
 const bootstrapJson = argValue("--bootstrap");
 const withUi = !rest.includes("--no-ui");
 
-if (priceCents === undefined || !/^\d+$/.test(priceCents)) {
-  console.error("Falta --price <centavos> (entero; ej: 4700 = S/ 47.00). En el flujo final saldra del pipeline QVAC local.");
+const items = itemSpecs.length
+  ? itemSpecs.map(parseItemSpec)
+  : priceCents !== undefined && /^\d+$/.test(priceCents)
+    ? [{ product, priceCents: BigInt(priceCents), quantity, proveedor: argValue("--proveedor") ?? null }]
+    : null;
+
+if (!items) {
+  console.error(
+    'Faltan items: --price <centavos> (+ --product) o --item "Nombre:centavos:cantidad[:Proveedor]" repetible.\n' +
+      "En el flujo final saldran del pipeline QVAC local."
+  );
   process.exit(1);
 }
 
@@ -71,28 +87,24 @@ const net = new ParidadNetwork(selfName, {
 const runner = new AggregationRunner(net);
 
 console.log(`🟢 Nodo ${selfName} — Paridad`);
-console.log(`   Precio local: ${priceCents} centavos (nunca sale de este proceso)`);
+console.log(`   ${items.length} producto(s) local(es); los precios nunca salen de este proceso`);
 
 net.on("state", (s) => {
   console.log(`   [red] ${s.status} — peers identificados: ${s.identifiedPeers.join(", ") || "ninguno"}`);
 });
 net.on("error", (err) => console.warn(`   ⚠️  [red] ${err.message}`));
 runner.on("protocol-error", (err) => console.warn(`   ⚠️  [ronda] ${err.message}`));
-runner.on("update", () => {
-  const { roundState, sharesSent, sharesReceived } = runner.getState();
-  console.log(`   [ronda] ${roundState} — shares enviados: ${sharesSent}, recibidos: ${sharesReceived}`);
-});
 runner.on("result", (result) => {
-  console.log(`\n📊 Benchmark (calculado localmente por ${selfName}, sin servidor central):`);
-  console.log(`   Promedio del grupo: S/ ${(result.averageCents / 100).toFixed(2)}`);
-  console.log(`   Tu posicion: ${result.positionPercent >= 0 ? "+" : ""}${result.positionPercent.toFixed(1)}% vs promedio`);
-  console.log(`   Participantes: ${result.participants}`);
-  // Linea parseable para el test end-to-end.
+  console.log(
+    `📊 ${result.product}: promedio del grupo $${(result.averageCents / 100).toFixed(2)}, ` +
+      `tu posicion ${result.positionPercent >= 0 ? "+" : ""}${result.positionPercent.toFixed(1)}% (${result.participants} participantes)`
+  );
+  // Linea parseable para el test end-to-end (una por producto).
   console.log(`RESULT ${JSON.stringify(result)}`);
 });
 
 net.start();
-runner.setPrice(priceCents);
+runner.setItems(items);
 
 // --- chequeos de entorno (solo lectura, para las tiles de la UI) ------------
 
@@ -132,6 +144,31 @@ function buildUiState() {
   const netState = net.getState();
   const round = runner.getState();
 
+  const uiItems = round.items.map((item) => ({
+    product: item.product,
+    quantity: item.quantity,
+    proveedor: item.proveedor,
+    unitPrice: item.unitPriceCents / 100,
+    status: item.status,
+    groupAverage: item.result ? item.result.averageCents / 100 : null,
+    positionPercent: item.result ? item.result.positionPercent : null,
+  }));
+
+  // Ahorro potencial: en los productos donde pagas MAS que el promedio,
+  // cuanto ahorrarias por ciclo de compra pagando el promedio.
+  let potentialSavings = 0;
+  let savingsCount = 0;
+  let benchmarkedCount = 0;
+  for (const item of uiItems) {
+    if (item.groupAverage === null) continue;
+    benchmarkedCount++;
+    const diff = (item.unitPrice - item.groupAverage) * item.quantity;
+    if (diff > 0) {
+      potentialSavings += diff;
+      savingsCount++;
+    }
+  }
+
   return {
     isMock: false,
     nodeName: selfName,
@@ -144,20 +181,22 @@ function buildUiState() {
     internet: { status: internetStatus },
     privacy: {
       sharesExchanged: round.sharesSent,
-      note: "Tu precio nunca sale de tu dispositivo. Solo se comparten fragmentos matematicos (shares), nunca el valor real.",
+      note: "Tus precios nunca salen de tu dispositivo. Solo se comparten fragmentos matematicos (shares), nunca los valores reales.",
     },
-    invoice: {
-      // El pipeline QVAC (factura -> OCR -> JSON) vive en otra rama; por
-      // ahora los items vienen de los argumentos de arranque del nodo.
-      // Solo el primero participa en la ronda actual.
-      fileName: null,
-      items: [{ product, quantity, unitPrice: Number(priceCents) / 100 }, ...queuedItems],
+    items: uiItems,
+    summary: {
+      potentialSavings,
+      savingsCount,
+      benchmarkedCount,
+      totalItems: uiItems.length,
+      participants: net.participants.length,
     },
-    benchmark: {
-      yourPrice: Number(priceCents) / 100,
-      groupAverage: round.result ? round.result.averageCents / 100 : null,
-      yourPositionPercent: round.result ? round.result.positionPercent : null,
-      participants: round.result ? round.result.participants : net.participants.length,
+    settings: {
+      port,
+      group: topicSeed ?? "paridad-network-v1",
+      participants: net.participants,
+      // La carpeta vigilada llegara con la integracion del pipeline QVAC.
+      invoiceFolder: null,
     },
   };
 }

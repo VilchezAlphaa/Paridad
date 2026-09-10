@@ -59,7 +59,8 @@
         margin-bottom: 8px;
       }
 
-      input[type="number"] {
+      input[type="number"],
+      select {
         font-family: "IBM Plex Sans", sans-serif;
         font-size: 0.95rem;
         color: var(--ink);
@@ -67,7 +68,21 @@
         border: 1px solid var(--border);
         border-radius: 10px;
         padding: 11px 14px;
+      }
+
+      input[type="number"] {
         width: 140px;
+      }
+
+      select {
+        width: 100%;
+        max-width: 420px;
+        appearance: none;
+        cursor: pointer;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23666F6B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+        padding-right: 38px;
       }
 
       .current-card {
@@ -191,8 +206,13 @@
         cuánto ahorrarías frente a lo que pagas ahora.
       </p>
 
+      <div class="field-block">
+        <label class="field-label" for="product-select">Producto</label>
+        <select id="product-select"></select>
+      </div>
+
       <div class="current-card">
-        <span class="lbl" id="product-label">Lo que pagas actualmente, por unidad</span>
+        <span class="lbl">Lo que pagas actualmente, por unidad</span>
         <span class="val" id="current-price">—</span>
       </div>
 
@@ -232,16 +252,34 @@
       // agregado que Paridad conoce). El mockup original comparaba contra
       // proveedores con nombre; eso revelaria precios individuales y va en
       // contra del modelo de privacidad, asi que aqui no existe.
-      import { mockDataSource } from "./mock-data.js";
-      import { realDataSource, isServedByParidadNode } from "./real-data-source.js";
+      import { pickDataSource, formatPrice as fmt } from "./ui-common.js";
 
       const $ = (id) => document.getElementById(id);
-      const fmt = (n) => (typeof n === "number" ? `$${n.toFixed(2)}` : "—");
 
-      let unitPrice = null;
-      let groupAverage = null;
+      let items = [];
+      let selectedProduct = null;
+
+      function currentItem() {
+        return items.find((item) => item.product === selectedProduct) ?? items[0] ?? null;
+      }
+
+      function renderSelect() {
+        const select = $("product-select");
+        select.replaceChildren();
+        for (const item of items) {
+          const option = document.createElement("option");
+          option.value = item.product;
+          option.textContent =
+            item.groupAverage === null ? `${item.product} (ronda pendiente)` : item.product;
+          select.append(option);
+        }
+        if (currentItem()) select.value = currentItem().product;
+      }
 
       function recalculate() {
+        const item = currentItem();
+        const unitPrice = item?.unitPrice ?? null;
+        const groupAverage = item?.groupAverage ?? null;
         const qty = Math.max(1, parseInt($("qty-input").value, 10) || 1);
 
         $("current-price").textContent = fmt(unitPrice);
@@ -250,7 +288,7 @@
         if (typeof unitPrice !== "number" || typeof groupAverage !== "number") {
           $("total-current").textContent = fmt(typeof unitPrice === "number" ? unitPrice * qty : null);
           $("total-group").textContent = "—";
-          $("savings-label").textContent = "Esperando ronda";
+          $("savings-label").textContent = "Esperando la ronda de este producto";
           $("savings-value").textContent = "—";
           return;
         }
@@ -275,21 +313,19 @@
 
       function onState(state) {
         $("mock-banner").hidden = !state.isMock;
-
-        const item = state.invoice.items[0];
-        if (item) {
-          $("product-label").textContent = `${item.product} — lo que pagas por unidad`;
-          unitPrice = typeof item.unitPrice === "number" ? item.unitPrice : null;
-        }
-        groupAverage =
-          typeof state.benchmark.groupAverage === "number" ? state.benchmark.groupAverage : null;
-
+        items = state.items;
+        if (!selectedProduct && items.length) selectedProduct = items[0].product;
+        renderSelect();
         recalculate();
       }
 
+      $("product-select").addEventListener("change", () => {
+        selectedProduct = $("product-select").value;
+        recalculate();
+      });
       $("qty-input").addEventListener("input", recalculate);
 
-      const dataSource = (await isServedByParidadNode()) ? realDataSource : mockDataSource;
+      const dataSource = await pickDataSource();
       dataSource.subscribe(onState);
     </script>
   </body>

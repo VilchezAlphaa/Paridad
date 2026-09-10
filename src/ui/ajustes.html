@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paridad — Ajustes</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,650&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="mock-banner" class="mock-banner" hidden>
+      DATOS DE PRUEBA (MOCK) &mdash; todavia no conectado a la red ni a QVAC
+    </div>
+
+    <div class="page">
+      <a href="./" class="back-link">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+        Volver al resumen
+      </a>
+
+      <h1 class="page-title">Ajustes</h1>
+      <p class="page-sub">
+        Configuracion de tu nodo Paridad. Todo corre en tu dispositivo: este panel es una
+        ventana al proceso local, no a un servidor.
+      </p>
+
+      <section class="panel">
+        <div class="settings-row">
+          <span class="settings-label">Tu nodo</span>
+          <span class="settings-value" id="set-node">&mdash;</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Grupo de comparacion</span>
+          <span class="settings-value" id="set-group">&mdash;</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Participantes del grupo</span>
+          <span class="settings-value" id="set-participants">&mdash;</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Puerto de esta interfaz</span>
+          <span class="settings-value" id="set-port">&mdash;</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">IA local (QVAC)</span>
+          <span class="settings-value" id="set-ai">&mdash;</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Internet</span>
+          <span class="settings-value" id="set-internet">&mdash;</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Carpeta de facturas vigilada</span>
+          <span class="settings-value" id="set-folder">&mdash;</span>
+        </div>
+      </section>
+
+      <section class="panel privacy-panel" style="margin-top: 16px">
+        <h3 class="privacy-title">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="4" y="11" width="16" height="10" rx="2" />
+            <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+          </svg>
+          Que sale de tu dispositivo
+        </h3>
+        <p class="privacy-note">
+          Nombres de productos (para que el grupo sepa que esta comparando) y fragmentos
+          matematicos (shares) que por si solos son ruido. Nunca: precios, facturas, texto OCR,
+          ni nombres de tus proveedores.
+        </p>
+      </section>
+    </div>
+
+    <script type="module">
+      import { pickDataSource } from "./ui-common.js";
+
+      const $ = (id) => document.getElementById(id);
+
+      function render(state) {
+        $("mock-banner").hidden = !state.isMock;
+
+        $("set-node").textContent = state.nodeName ?? "—";
+        $("set-group").textContent = state.settings.group;
+        $("set-participants").textContent = state.settings.participants.join(", ");
+        $("set-port").textContent = String(state.settings.port);
+        $("set-ai").textContent =
+          state.localAi.status === "ACTIVE" ? state.localAi.model : state.localAi.status;
+        $("set-internet").textContent = state.internet.status;
+
+        const folder = $("set-folder");
+        if (state.settings.invoiceFolder) {
+          folder.textContent = state.settings.invoiceFolder;
+        } else {
+          folder.innerHTML = `<span class="dim">se define al integrar el pipeline QVAC</span>`;
+        }
+      }
+
+      const dataSource = await pickDataSource();
+      dataSource.subscribe(render);
+    </script>
+  </body>
+</html>

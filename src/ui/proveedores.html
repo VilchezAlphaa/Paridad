@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paridad — Proveedores</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,650&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="mock-banner" class="mock-banner" hidden>
+      DATOS DE PRUEBA (MOCK) &mdash; todavia no conectado a la red ni a QVAC
+    </div>
+
+    <div class="page">
+      <a href="./" class="back-link">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+        Volver al resumen
+      </a>
+
+      <h1 class="page-title">Tus proveedores</h1>
+      <p class="page-sub">
+        A quien le compras y a que precios, segun tus propias facturas. Este dato es
+        <strong>100% local</strong>: los nombres de tus proveedores y tus precios nunca se
+        comparten con el grupo ni salen de tu dispositivo.
+      </p>
+
+      <div id="providers"></div>
+    </div>
+
+    <script type="module">
+      import { pickDataSource, formatPrice } from "./ui-common.js";
+
+      const $ = (id) => document.getElementById(id);
+
+      function render(state) {
+        $("mock-banner").hidden = !state.isMock;
+
+        const byProvider = new Map();
+        for (const item of state.items) {
+          const key = item.proveedor ?? "Sin proveedor registrado";
+          if (!byProvider.has(key)) byProvider.set(key, []);
+          byProvider.get(key).push(item);
+        }
+
+        const container = $("providers");
+        container.replaceChildren();
+
+        if (!byProvider.size) {
+          const empty = document.createElement("section");
+          empty.className = "panel";
+          empty.textContent = "Sin proveedores todavia: apareceran al procesar tus facturas.";
+          container.append(empty);
+          return;
+        }
+
+        for (const [proveedor, items] of byProvider) {
+          const totalPerCycle = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+
+          const card = document.createElement("section");
+          card.className = "panel provider-card";
+
+          const head = document.createElement("div");
+          head.className = "provider-head";
+          const name = document.createElement("span");
+          name.className = "provider-name";
+          name.textContent = proveedor;
+          const meta = document.createElement("span");
+          meta.className = "provider-meta";
+          meta.textContent = `${items.length} producto(s) · ${formatPrice(totalPerCycle)} por ciclo de compra`;
+          head.append(name, meta);
+
+          const list = document.createElement("div");
+          list.className = "provider-items";
+          for (const item of items) {
+            const row = document.createElement("div");
+            row.className = "provider-item";
+            const label = document.createElement("span");
+            label.textContent = `${item.product} ×${item.quantity}`;
+            const price = document.createElement("span");
+            price.className = "p-price";
+            price.textContent = formatPrice(item.unitPrice);
+            row.append(label, price);
+            list.append(row);
+          }
+
+          card.append(head, list);
+          container.append(card);
+        }
+      }
+
+      const dataSource = await pickDataSource();
+      dataSource.subscribe(render);
+    </script>
+  </body>
+</html>

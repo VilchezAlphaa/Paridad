@@ -15,18 +15,37 @@ import createTestnet from "hyperdht/testnet.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const nodePath = path.join(__dirname, "nodo-paridad.mjs");
 
-// Precios sinteticos de demo, mismos que p2p-privacy-test.mjs. Los
-// "queue" son productos en cola (solo display) para llenar el top-5.
-const QUEUE = [
-  "Filtro de aceite:680:12",
-  "Pastillas de freno delanteras:2850:6",
-  "Bateria 12V 650A:7800:2",
-  "Bujias de encendido (juego x4):1640:8",
-];
+// Matriz sintetica de demo: 5 productos comunes, precios DISTINTOS por
+// nodo (cada producto corre su propia ronda P2P). El primer producto
+// conserva los precios historicos de p2p-privacy-test.mjs. Proveedores
+// solo para el nodo A (dato local, pagina "Proveedores").
+const ITEMS = {
+  A: [
+    "Aceite Motor 20W50:4700:4:Distribuidora Central",
+    "Filtro de aceite:680:12:Distribuidora Central",
+    "Pastillas de freno delanteras:2850:6:Refaccionaria Lopez",
+    "Bateria 12V 650A:7800:2:Repuestos El Rapido",
+    "Bujias de encendido (juego x4):1640:8:Ferreteria Ideal",
+  ],
+  B: [
+    "Aceite Motor 20W50:3100:2",
+    "Filtro de aceite:640:10",
+    "Pastillas de freno delanteras:2310:4",
+    "Bateria 12V 650A:8250:1",
+    "Bujias de encendido (juego x4):1590:6",
+  ],
+  C: [
+    "Aceite Motor 20W50:5200:6",
+    "Filtro de aceite:720:15",
+    "Pastillas de freno delanteras:2500:8",
+    "Bateria 12V 650A:8100:3",
+    "Bujias de encendido (juego x4):1710:10",
+  ],
+};
 const NODES = [
-  { name: "A", price: "4700", port: 4700, product: "Aceite Motor 20W50", quantity: "4" },
-  { name: "B", price: "3100", port: 4701, product: "Aceite Motor 20W50", quantity: "2" },
-  { name: "C", price: "5200", port: 4702, product: "Aceite Motor 20W50", quantity: "6" },
+  { name: "A", port: 4700 },
+  { name: "B", port: 4701 },
+  { name: "C", port: 4702 },
 ];
 
 const testnet = await createTestnet(3);
@@ -35,18 +54,15 @@ const topicSeed = `paridad-demo-local-${process.pid}`;
 
 console.log("🎬 Demo local de Paridad (3 nodos en esta maquina, DHT local)");
 
-const children = NODES.map(({ name, price, port, product, quantity }) => {
+const children = NODES.map(({ name, port }) => {
   const child = spawn(
     process.execPath,
     [
       nodePath, name,
-      "--price", price,
-      "--product", product,
-      "--quantity", quantity,
       "--port", String(port),
       "--topic", topicSeed,
       "--bootstrap", bootstrapJson,
-      ...QUEUE.flatMap((item) => ["--queue", item]),
+      ...ITEMS[name].flatMap((item) => ["--item", item]),
     ],
     { stdio: ["ignore", "pipe", "pipe"] }
   );

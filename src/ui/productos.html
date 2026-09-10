@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paridad — Productos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,650&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="mock-banner" class="mock-banner" hidden>
+      DATOS DE PRUEBA (MOCK) &mdash; todavia no conectado a la red ni a QVAC
+    </div>
+
+    <div class="page">
+      <a href="./" class="back-link">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+        Volver al resumen
+      </a>
+
+      <h1 class="page-title">Tus productos</h1>
+      <p class="page-sub" id="products-sub">
+        Todos los productos detectados en tus compras, comparados con el promedio anonimo del grupo.
+      </p>
+
+      <section class="panel">
+        <div class="rows" id="product-rows"></div>
+      </section>
+    </div>
+
+    <script type="module">
+      import { pickDataSource, buildItemRow } from "./ui-common.js";
+
+      const $ = (id) => document.getElementById(id);
+
+      function render(state) {
+        $("mock-banner").hidden = !state.isMock;
+
+        const { benchmarkedCount, totalItems, participants } = state.summary;
+        $("products-sub").textContent =
+          `${totalItems} producto(s) detectados; ${benchmarkedCount} comparados con el promedio anonimo de ${participants} negocios.`;
+
+        const rows = $("product-rows");
+        rows.replaceChildren();
+        if (!state.items.length) {
+          const row = document.createElement("div");
+          row.className = "row";
+          row.innerHTML = `<span class="row-name"><span class="prod-name">Sin productos todavia</span></span>`;
+          rows.append(row);
+          return;
+        }
+        state.items.forEach((item, index) => rows.append(buildItemRow(item, index, { showProveedor: true })));
+      }
+
+      const dataSource = await pickDataSource();
+      dataSource.subscribe(render);
+    </script>
+  </body>
+</html>

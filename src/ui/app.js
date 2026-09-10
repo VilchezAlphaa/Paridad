@@ -1,16 +1,8 @@
-// Renderizador de la UI de Paridad. No sabe de Hyperswarm ni de QVAC:
-// solo recibe un estado (via una fuente con subscribe(callback)) y lo
-// pinta. Si la pagina la sirve nodo-paridad.mjs usa la fuente real
-// (SSE); si se sirve como estaticos (`npm run ui`), cae al mock.
-//
-// El diseno replica los mockups del equipo (paridad-dashboard.html),
-// con una diferencia deliberada: los mockups comparaban contra precios
-// de proveedores con nombre, pero el modelo de privacidad de Paridad
-// solo conoce agregados. Aqui el veredicto compara SIEMPRE contra el
-// promedio anonimo del grupo.
-import { mockDataSource } from "./mock-data.js";
-import { realDataSource, isServedByParidadNode } from "./real-data-source.js";
+// Renderizador del dashboard de Paridad. No sabe de Hyperswarm ni de
+// QVAC: solo recibe un estado (subscribe(callback)) y lo pinta. Fuente
+// real por SSE si la sirve nodo-paridad.mjs; mock si es estatica.
 import { NETWORK_STATE } from "../network/network-state.mjs";
+import { pickDataSource, formatPrice, buildItemRow } from "./ui-common.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,25 +11,6 @@ function setStatus(id, text, tone) {
   el.textContent = text;
   if (tone) el.dataset.tone = tone;
   else delete el.dataset.tone;
-}
-
-function formatPrice(value) {
-  if (value === "hidden") return "🔒 oculto";
-  if (typeof value === "number") return `$${value.toFixed(2)}`;
-  return "—";
-}
-
-function verdictFor(positionPercent) {
-  if (typeof positionPercent !== "number") {
-    return { className: "", label: "Esperando ronda", detail: "faltan participantes" };
-  }
-  if (positionPercent > 1) {
-    return { className: "over", label: "Pagas de más", detail: `${positionPercent.toFixed(0)}% más caro` };
-  }
-  if (positionPercent < -1) {
-    return { className: "good", label: "Buen precio", detail: `${Math.abs(positionPercent).toFixed(0)}% menos` };
-  }
-  return { className: "good", label: "En el promedio", detail: "±1%" };
 }
 
 function renderHeader(state) {
@@ -63,8 +36,7 @@ function renderProducts(state) {
   const rows = $("product-rows");
   rows.replaceChildren();
 
-  const items = state.invoice.items;
-  if (!items.length) {
+  if (!state.items.length) {
     const row = document.createElement("div");
     row.className = "row";
     row.innerHTML = `<span class="row-rank">01</span><span class="row-name"><span class="prod-name">Sin datos</span></span>`;
@@ -72,76 +44,30 @@ function renderProducts(state) {
     return;
   }
 
-  items.forEach((item, index) => {
-    // Una ronda cubre UN producto: solo el primero de la lista tiene
-    // benchmark; los demas esperan su propia ronda ("en cola").
-    const isBenchmarked = index === 0;
-    const verdict = isBenchmarked
-      ? verdictFor(state.benchmark.yourPositionPercent)
-      : { className: "", label: "En cola", detail: "esperando su ronda" };
-
-    const row = document.createElement("div");
-    row.className = `row${verdict.className ? ` row-${verdict.className}` : ""}`;
-
-    const rank = document.createElement("span");
-    rank.className = "row-rank";
-    rank.textContent = String(index + 1).padStart(2, "0");
-
-    const nameWrap = document.createElement("span");
-    nameWrap.className = "row-name";
-    const chip = document.createElement("span");
-    chip.className = "cat-chip";
-    chip.textContent = item.product.slice(0, 3);
-    const prodName = document.createElement("span");
-    prodName.className = "prod-name";
-    prodName.textContent = item.product;
-    nameWrap.append(chip, prodName);
-
-    const yourPrice = document.createElement("span");
-    yourPrice.className = "price";
-    yourPrice.innerHTML = `<span class="lbl">Tú pagas</span>`;
-    yourPrice.append(formatPrice(item.unitPrice));
-
-    const groupPrice = document.createElement("span");
-    groupPrice.className = "price";
-    groupPrice.innerHTML = `<span class="lbl">Promedio del grupo</span>`;
-    groupPrice.append(isBenchmarked ? formatPrice(state.benchmark.groupAverage) : "—");
-
-    const verdictEl = document.createElement("span");
-    verdictEl.className = `verdict${verdict.className ? ` ${verdict.className}` : ""}`;
-    verdictEl.innerHTML = `<span class="verdict-label"></span><span class="verdict-pct"></span>`;
-    verdictEl.querySelector(".verdict-label").textContent = verdict.label;
-    verdictEl.querySelector(".verdict-pct").textContent = verdict.detail;
-
-    row.append(rank, nameWrap, yourPrice, groupPrice, verdictEl);
-    rows.append(row);
-  });
+  // El dashboard muestra hasta 5; la lista completa vive en productos.html.
+  state.items.slice(0, 5).forEach((item, index) => rows.append(buildItemRow(item, index)));
 }
 
 function renderKpis(state) {
-  const { groupAverage, yourPositionPercent, participants } = state.benchmark;
+  const { potentialSavings, savingsCount, benchmarkedCount, totalItems, participants } = state.summary;
 
-  $("kpi-average").textContent = formatPrice(groupAverage);
+  $("kpi-savings").textContent = benchmarkedCount > 0 ? formatPrice(potentialSavings) : "—";
 
-  const position = $("kpi-position");
-  const positionSub = $("kpi-position-sub");
-  if (typeof yourPositionPercent === "number") {
-    position.textContent = `${yourPositionPercent > 0 ? "+" : ""}${yourPositionPercent.toFixed(1)}%`;
-    if (yourPositionPercent > 1) {
-      position.dataset.tone = "over";
-      positionSub.textContent = `pagas ${yourPositionPercent.toFixed(1)}% más que el grupo`;
-    } else if (yourPositionPercent < -1) {
-      position.dataset.tone = "good";
-      positionSub.textContent = `pagas ${Math.abs(yourPositionPercent).toFixed(1)}% menos que el grupo`;
-    } else {
-      delete position.dataset.tone;
-      positionSub.textContent = "estás en el promedio del grupo";
-    }
+  const count = $("kpi-savings-count");
+  if (benchmarkedCount > 0) {
+    count.innerHTML = "";
+    count.append(String(savingsCount));
+    const dim = document.createElement("span");
+    dim.className = "kpi-dim";
+    dim.textContent = ` de ${benchmarkedCount}`;
+    count.append(dim);
   } else {
-    position.textContent = "—";
-    delete position.dataset.tone;
-    positionSub.textContent = "esperando la ronda del grupo";
+    count.textContent = "—";
   }
+  $("kpi-savings-count-sub").textContent =
+    benchmarkedCount > 0
+      ? `productos comparados (${totalItems} en total)`
+      : "esperando las rondas del grupo";
 
   $("kpi-participants").textContent = String(participants);
 }
@@ -191,5 +117,5 @@ function render(state) {
   renderStatus(state);
 }
 
-const dataSource = (await isServedByParidadNode()) ? realDataSource : mockDataSource;
+const dataSource = await pickDataSource();
 dataSource.subscribe(render);
