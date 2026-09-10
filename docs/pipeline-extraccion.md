@@ -120,6 +120,18 @@ Mitigaciones aplicadas:
 - **La aceleración por GPU depende del hardware.** En esta iGPU (~1 GB) el OCR
   solo cabe con `canvasSize` ≤ 1280; con canvas mayores aborta. En otra máquina
   el margen puede ser distinto, por eso existe el respaldo a CPU.
+- **No caben tres procesos haciendo OCR en GPU a la vez.** Con tres nodos
+  Paridad extrayendo simultáneamente en la misma máquina, el worker de QVAC
+  muere entero (`Bare worker exited mid-request (code=3221226505)`, que es
+  `STATUS_STACK_BUFFER_OVERRUN`). Dos procesos concurrentes sí funcionan.
+  Consecuencias prácticas:
+    - el respaldo recarga **los dos** modelos en CPU, no solo el OCR: cuando el
+      worker cae se lleva también el modelo de lenguaje;
+    - el test end-to-end arranca los nodos escalonados 15 s para que las fases
+      de OCR no se solapen (la fase P2P sí queda concurrente);
+    - en la demo real cada participante debería estar en una máquina distinta,
+      o bien ejecutarse con `PARIDAD_OCR_BACKEND=cpu` si los tres nodos van a
+      compartir una sola máquina y GPU.
 - **El margen de precisión es estrecho.** Varias configuraciones vecinas leen
   mal `20W50` o pierden el punto decimal de `47.00`. La configuración adoptada
   está en una región verificada, pero la región no es ancha.

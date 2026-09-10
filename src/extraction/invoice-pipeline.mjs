@@ -240,10 +240,27 @@ export async function loadPipeline({ onProgress, backendDevice = OCR_BACKEND_PRE
   return { ocrModelId, llmModelId, ocrBackend: backendDevice, onProgress };
 }
 
+/**
+ * Libera los modelos. Es código de limpieza: si el worker de QVAC ya murió,
+ * descargar es discutible y, sobre todo, NO debe lanzar. Antes lo hacía, y un
+ * `Failed to unload model` en el bloque finally enmascaraba el error real que
+ * había tumbado al worker.
+ */
 export async function unloadPipeline({ ocrModelId, llmModelId }) {
-  if (ocrModelId) await unloadModel({ modelId: ocrModelId, clearStorage: false });
-  if (llmModelId) await unloadModel({ modelId: llmModelId, clearStorage: false });
-  await close();
+  for (const modelId of [ocrModelId, llmModelId]) {
+    if (!modelId) continue;
+    try {
+      await unloadModel({ modelId, clearStorage: false });
+    } catch (err) {
+      console.warn(`⚠️  No se pudo descargar el modelo "${modelId}": ${err.message}`);
+    }
+  }
+
+  try {
+    await close();
+  } catch (err) {
+    console.warn(`⚠️  No se pudo cerrar el cliente QVAC: ${err.message}`);
+  }
 }
 
 /** Paso 1: imagen → texto. */
@@ -310,16 +327,29 @@ export async function ocrInvoiceConRespaldo(sesion, imagePath) {
     if (sesion.ocrBackend === "cpu") throw err;
 
     console.warn(
-      `⚠️  OCR en "${sesion.ocrBackend}" falló (${err.message}). Recargando el modelo en CPU y reintentando.`
+      `⚠️  OCR en "${sesion.ocrBackend}" falló (${err.message}). Recargando en CPU y reintentando.`
     );
 
-    try {
-      await unloadModel({ modelId: sesion.ocrModelId, clearStorage: false });
-    } catch {
-      // El modelo pudo quedar inutilizable tras el fallo; da igual, se reemplaza.
+    // Se recargan LOS DOS modelos, no solo el OCR.
+    //
+    // Cuando la GPU se queda sin memoria, QVAC no falla solo la operación: en
+    // las pruebas con tres procesos concurrentes sobre una iGPU de ~1 GB, el
+    // worker de Bare muere entero (`code=3221226505`). Eso invalida también el
+    // modelo de lenguaje, así que recargar únicamente el OCR dejaba la sesión
+    // con un llmModelId muerto y el fallo reaparecía en el paso siguiente.
+    for (const modelId of [sesion.ocrModelId, sesion.llmModelId]) {
+      try {
+        await unloadModel({ modelId, clearStorage: false });
+      } catch {
+        // Ya estaba muerto: no hay nada que liberar.
+      }
     }
 
     sesion.ocrModelId = await cargarModeloOcr("cpu", sesion.onProgress);
+    sesion.llmModelId = await loadModel({
+      modelSrc: QWEN3_600M_INST_Q4,
+      onProgress: sesion.onProgress,
+    });
     sesion.ocrBackend = "cpu";
 
     return ocrInvoice({ ocrModelId: sesion.ocrModelId, imagePath });
