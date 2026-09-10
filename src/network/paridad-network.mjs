@@ -220,10 +220,28 @@ export class ParidadNetwork extends EventEmitter {
 
     conn.on("error", (err) => {
       this.emit("error", new Error(`Conexion con ${entry.name ?? "peer sin identificar"}: ${err.message}`));
-      // La limpieza de estado la hace "close", que Hyperswarm emite igual tras un error.
+      // La limpieza de estado normalmente la hace "close", que Hyperswarm
+      // emite igual tras un error. Pero con red real inestable (Wi-Fi, no
+      // localhost) se observaron conexiones que erroran y luego NUNCA
+      // cierran: el timer de abajo es el respaldo para que esa entrada no
+      // se quede viva para siempre en connectionsByKey.
     });
 
     conn.on("close", () => this._handleClose(remoteKey, entry));
+
+    // Respaldo: si tras este plazo la conexion no se identifico Y sigue
+    // "viva" segun nuestro propio mapa, se fuerza su cierre y limpieza.
+    // Sin esto, una conexion que erroro sin disparar "close" (visto en
+    // pruebas reales entre laptops, no en localhost) queda acumulada para
+    // siempre: cada reintento de descubrimiento suma una entrada mas y la
+    // memoria del proceso crece sin limite durante una reconexion larga.
+    const idTimeout = setTimeout(() => {
+      if (this.connectionsByKey.get(remoteKey) !== entry || entry.name) return;
+      entry.conn.destroy();
+      this._handleClose(remoteKey, entry);
+    }, 20000);
+    idTimeout.unref?.();
+    conn.on("close", () => clearTimeout(idTimeout));
   }
 
   _handleData(remoteKey, entry, data) {
