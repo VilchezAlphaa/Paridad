@@ -46,12 +46,16 @@ function renderHeader(state) {
   $("avatar").textContent = name.slice(0, 2).toUpperCase();
 
   const { status } = state.network;
+  const sync = $("sync-text");
   if (status === NETWORK_STATE.READY_FOR_AGGREGATION) {
-    $("sync-text").textContent = "Conectado al grupo";
+    sync.textContent = "Conectado al grupo";
+    sync.dataset.tone = "ok";
   } else if (status === NETWORK_STATE.PEER_DISCONNECTED) {
-    $("sync-text").textContent = "Un peer se desconectó";
+    sync.textContent = "Un peer se desconectó";
+    sync.dataset.tone = "bad";
   } else {
-    $("sync-text").textContent = "Buscando peers…";
+    sync.textContent = "Buscando peers…";
+    sync.dataset.tone = "warn";
   }
 }
 
@@ -115,10 +119,18 @@ function renderKpis(state) {
   const { groupAverage, yourPositionPercent, participants } = state.benchmark;
 
   $("kpi-average").textContent = formatPrice(groupAverage);
-  $("kpi-position").textContent =
-    typeof yourPositionPercent === "number"
-      ? `${yourPositionPercent > 0 ? "+" : ""}${yourPositionPercent.toFixed(1)}%`
-      : "—";
+
+  const position = $("kpi-position");
+  if (typeof yourPositionPercent === "number") {
+    position.textContent = `${yourPositionPercent > 0 ? "+" : ""}${yourPositionPercent.toFixed(1)}%`;
+    if (yourPositionPercent > 1) position.dataset.tone = "over";
+    else if (yourPositionPercent < -1) position.dataset.tone = "good";
+    else delete position.dataset.tone;
+  } else {
+    position.textContent = "—";
+    delete position.dataset.tone;
+  }
+
   $("kpi-participants").textContent = String(participants);
 }
 
