@@ -121,14 +121,23 @@ function renderKpis(state) {
   $("kpi-average").textContent = formatPrice(groupAverage);
 
   const position = $("kpi-position");
+  const positionSub = $("kpi-position-sub");
   if (typeof yourPositionPercent === "number") {
     position.textContent = `${yourPositionPercent > 0 ? "+" : ""}${yourPositionPercent.toFixed(1)}%`;
-    if (yourPositionPercent > 1) position.dataset.tone = "over";
-    else if (yourPositionPercent < -1) position.dataset.tone = "good";
-    else delete position.dataset.tone;
+    if (yourPositionPercent > 1) {
+      position.dataset.tone = "over";
+      positionSub.textContent = `pagas ${yourPositionPercent.toFixed(1)}% más que el grupo`;
+    } else if (yourPositionPercent < -1) {
+      position.dataset.tone = "good";
+      positionSub.textContent = `pagas ${Math.abs(yourPositionPercent).toFixed(1)}% menos que el grupo`;
+    } else {
+      delete position.dataset.tone;
+      positionSub.textContent = "estás en el promedio del grupo";
+    }
   } else {
     position.textContent = "—";
     delete position.dataset.tone;
+    positionSub.textContent = "esperando la ronda del grupo";
   }
 
   $("kpi-participants").textContent = String(participants);

@@ -40,6 +40,29 @@
         </div>
       </header>
 
+      <section class="status-strip" aria-label="Estado del sistema">
+        <div class="status-chip">
+          <span class="status-label">P2P</span>
+          <span class="status-value" id="st-p2p">&mdash;</span>
+        </div>
+        <div class="status-chip">
+          <span class="status-label">Peers</span>
+          <span class="status-value" id="st-peers">&mdash;</span>
+        </div>
+        <div class="status-chip">
+          <span class="status-label">IA local</span>
+          <span class="status-value" id="st-ai">&mdash;</span>
+        </div>
+        <div class="status-chip">
+          <span class="status-label">Internet</span>
+          <span class="status-value" id="st-internet">&mdash;</span>
+        </div>
+        <div class="status-chip">
+          <span class="status-label">Shares enviados</span>
+          <span class="status-value" id="st-shares">&mdash;</span>
+        </div>
+      </section>
+
       <div class="main-grid">
         <div class="col-left">
           <section class="panel" aria-label="Tus compras frente al grupo">
@@ -68,9 +91,9 @@
               <div class="kpi-sub">por unidad, calculado sin servidor central</div>
             </div>
             <div class="kpi-card">
-              <div class="kpi-label">Tu posicion</div>
+              <div class="kpi-label">Frente al promedio</div>
               <div class="kpi-value" id="kpi-position">&mdash;</div>
-              <div class="kpi-sub">frente al promedio del grupo</div>
+              <div class="kpi-sub" id="kpi-position-sub">esperando la ronda del grupo</div>
             </div>
             <div class="kpi-card">
               <div class="kpi-label">Participantes</div>
@@ -81,30 +104,61 @@
         </div>
 
         <div class="col-right">
-          <div class="col-right-label">Estado del nodo</div>
+          <div class="col-right-label">Opciones</div>
 
-          <section class="panel status-panel" aria-label="Estado del sistema">
-            <div class="status-row">
-              <span class="status-label">P2P</span>
-              <span class="status-value" id="st-p2p">&mdash;</span>
+          <div class="options-grid">
+            <a class="opt-card" href="calculadora.html">
+              <div class="opt-icon copper">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="5" y="3" width="14" height="18" rx="2" />
+                  <line x1="8" y1="7" x2="16" y2="7" />
+                  <line x1="8" y1="11" x2="8.01" y2="11" />
+                  <line x1="12" y1="11" x2="12.01" y2="11" />
+                  <line x1="16" y1="11" x2="16.01" y2="11" />
+                  <line x1="8" y1="15" x2="8.01" y2="15" />
+                  <line x1="12" y1="15" x2="12.01" y2="15" />
+                  <line x1="16" y1="15" x2="16.01" y2="15" />
+                </svg>
+              </div>
+              <div class="opt-label">Calculadora de ahorro</div>
+            </a>
+
+            <div class="opt-card soon" title="Disponible cuando haya varios productos por ronda">
+              <div class="opt-icon teal">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="4" y1="6" x2="20" y2="6" />
+                  <line x1="4" y1="12" x2="20" y2="12" />
+                  <line x1="4" y1="18" x2="20" y2="18" />
+                </svg>
+              </div>
+              <div class="opt-label">Ver todos los productos</div>
+              <span class="soon-tag">pronto</span>
             </div>
-            <div class="status-row">
-              <span class="status-label">Peers</span>
-              <span class="status-value" id="st-peers">&mdash;</span>
+
+            <div class="opt-card soon" title="Disponible en una proxima version">
+              <div class="opt-icon teal">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 9.5L12 3l9 6.5" />
+                  <path d="M5 9.5V21h14V9.5" />
+                  <line x1="10" y1="21" x2="10" y2="14" />
+                  <line x1="14" y1="21" x2="14" y2="14" />
+                </svg>
+              </div>
+              <div class="opt-label">Proveedores</div>
+              <span class="soon-tag">pronto</span>
             </div>
-            <div class="status-row">
-              <span class="status-label">IA local</span>
-              <span class="status-value" id="st-ai">&mdash;</span>
+
+            <div class="opt-card soon" title="Disponible en una proxima version">
+              <div class="opt-icon teal">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3.2" />
+                  <path d="M12 2.5v3.2M12 18.3v3.2M4.6 4.6l2.3 2.3M17.1 17.1l2.3 2.3M2.5 12h3.2M18.3 12h3.2M4.6 19.4l2.3-2.3M17.1 6.9l2.3-2.3" />
+                </svg>
+              </div>
+              <div class="opt-label">Ajustes</div>
+              <span class="soon-tag">pronto</span>
             </div>
-            <div class="status-row">
-              <span class="status-label">Internet</span>
-              <span class="status-value" id="st-internet">&mdash;</span>
-            </div>
-            <div class="status-row">
-              <span class="status-label">Shares enviados</span>
-              <span class="status-value" id="st-shares">&mdash;</span>
-            </div>
-          </section>
+          </div>
 
           <section class="panel privacy-panel" aria-label="Privacidad">
             <h3 class="privacy-title">
@@ -116,26 +170,6 @@
             </h3>
             <p class="privacy-note" id="privacy-note">&mdash;</p>
           </section>
-
-          <a class="opt-card" href="calculadora.html">
-            <div class="opt-icon copper">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="5" y="3" width="14" height="18" rx="2" />
-                <line x1="8" y1="7" x2="16" y2="7" />
-                <line x1="8" y1="11" x2="8.01" y2="11" />
-                <line x1="12" y1="11" x2="12.01" y2="11" />
-                <line x1="16" y1="11" x2="16.01" y2="11" />
-                <line x1="8" y1="15" x2="8.01" y2="15" />
-                <line x1="12" y1="15" x2="12.01" y2="15" />
-                <line x1="16" y1="15" x2="16.01" y2="15" />
-              </svg>
-            </div>
-            <div>
-              <div class="opt-label">Calculadora de ahorro</div>
-              <div class="opt-sub">Cuánto ahorrarías al precio promedio</div>
-            </div>
-            <svg class="opt-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
-          </a>
         </div>
       </div>
     </div>

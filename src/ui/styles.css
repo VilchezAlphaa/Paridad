@@ -368,7 +368,28 @@ header {
   margin-top: 8px;
 }
 
-/* ---------- columna derecha: estado del nodo ---------- */
+/* ---------- franja de estado del nodo (bajo el header) ---------- */
+.status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.status-chip {
+  flex: 1 1 150px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 13px 18px;
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+/* ---------- columna derecha: opciones ---------- */
 .col-right-label {
   font-size: 0.85rem;
   font-weight: 500;
@@ -378,26 +399,10 @@ header {
   padding-left: 4px;
 }
 
-.status-panel {
-  padding: 12px 26px;
-}
-
-.status-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 15px 0;
-  border-top: 1px solid var(--border);
-}
-
-.status-row:first-child {
-  border-top: none;
-}
-
 .status-label {
-  font-size: 0.92rem;
+  font-size: 0.85rem;
   color: var(--ink-soft);
+  white-space: nowrap;
 }
 
 .status-value {
@@ -470,14 +475,24 @@ header {
   margin: 0;
 }
 
+.options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
 .opt-card {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 20px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 20px 24px;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+  padding: 26px 16px;
   cursor: pointer;
   box-shadow: var(--shadow);
   transition: transform 0.12s ease, border-color 0.15s ease;
@@ -489,6 +504,33 @@ header {
 
 .opt-card:active {
   transform: scale(0.97);
+}
+
+.opt-card.soon {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.opt-card.soon:hover {
+  border-color: var(--border);
+}
+
+.opt-card.soon:active {
+  transform: none;
+}
+
+.soon-tag {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #e7e2d3;
+  color: var(--ink-soft);
+  padding: 2px 7px;
+  border-radius: 5px;
 }
 
 .opt-icon {
@@ -506,25 +548,20 @@ header {
   color: var(--copper-dark);
 }
 
+.opt-icon.teal {
+  background: var(--teal-soft);
+  color: var(--teal-dark);
+}
+
 .opt-icon svg {
   width: 24px;
   height: 24px;
 }
 
 .opt-label {
-  font-size: 1rem;
+  font-size: 0.92rem;
   font-weight: 500;
-}
-
-.opt-sub {
-  font-size: 0.8rem;
-  color: var(--ink-faint);
-  margin-top: 2px;
-}
-
-.opt-chevron {
-  margin-left: auto;
-  color: var(--ink-faint);
+  line-height: 1.3;
 }
 
 /* ---------- factura ---------- */
