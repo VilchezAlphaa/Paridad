@@ -54,16 +54,7 @@ function renderKpis(state) {
   $("kpi-savings").textContent = benchmarkedCount > 0 ? formatPrice(potentialSavings) : "—";
 
   const count = $("kpi-savings-count");
-  if (benchmarkedCount > 0) {
-    count.innerHTML = "";
-    count.append(String(savingsCount));
-    const dim = document.createElement("span");
-    dim.className = "kpi-dim";
-    dim.textContent = ` de ${benchmarkedCount}`;
-    count.append(dim);
-  } else {
-    count.textContent = "—";
-  }
+  count.textContent = benchmarkedCount > 0 ? `${savingsCount} de ${benchmarkedCount}` : "—";
   $("kpi-savings-count-sub").textContent =
     benchmarkedCount > 0
       ? `productos comparados (${totalItems} en total)`
@@ -109,12 +100,43 @@ function renderStatus(state) {
   $("privacy-note").textContent = state.privacy.note;
 }
 
+function renderExtraction(state) {
+  const note = $("extract-note");
+  const ex = state.extraction;
+
+  if (!ex || ex.status === "DISABLED") {
+    note.textContent =
+      "La IA local detecta sola las facturas que guardes en tu carpeta — nada se sube a la nube";
+    return;
+  }
+  if (ex.status === "LOADING_AI") {
+    note.textContent = "Cargando la IA local (QVAC)… los modelos corren en este dispositivo";
+    return;
+  }
+  if (ex.status === "PROCESSING") {
+    const step = (ok, label) => `${ok ? "✓" : "…"} ${label}`;
+    note.textContent =
+      `Procesando ${ex.currentFile}:  ${step(ex.steps.cargada, "Factura cargada")}  ` +
+      `${step(ex.steps.ia, "IA local")}  ${step(ex.steps.producto, "Producto")}  ${step(ex.steps.precio, "Precio")}`;
+    return;
+  }
+  if (ex.status === "ERROR" || ex.error) {
+    note.textContent = `⚠ Extracción con problema: ${ex.error ?? "error desconocido"}`;
+    return;
+  }
+  // READY
+  note.textContent =
+    `✓ IA local lista — ${ex.processed} factura(s) procesadas en este dispositivo` +
+    (ex.folder ? ` · vigilando ${ex.folder}` : "");
+}
+
 function render(state) {
   $("mock-banner").hidden = !state.isMock;
   renderHeader(state);
   renderProducts(state);
   renderKpis(state);
   renderStatus(state);
+  renderExtraction(state);
 }
 
 const dataSource = await pickDataSource();

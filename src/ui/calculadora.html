@@ -12,110 +12,78 @@
     />
     <link rel="stylesheet" href="styles.css" />
     <style>
-      /* Estilos propios de la calculadora (adaptados del mockup
-         paridad-calculadora.html; el resto viene de styles.css). */
-      .page {
-        max-width: 860px;
-        margin: 0 auto;
-        padding: 44px 32px 72px;
-      }
-
-      .back-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 0.85rem;
-        color: var(--ink-soft);
-        margin-bottom: 18px;
-      }
-
-      .back-link:hover {
-        color: var(--ink);
-      }
-
-      h1 {
-        font-family: "Fraunces", serif;
-        font-weight: 650;
-        font-size: 2.4rem;
-        margin: 0 0 8px;
-      }
-
-      .page-sub {
-        font-size: 1rem;
-        color: var(--ink-soft);
-        margin: 0 0 32px;
-        max-width: 560px;
-        line-height: 1.55;
-      }
-
-      .field-block {
-        margin-bottom: 22px;
-      }
-
+      /* Estilos propios de la calculadora; page/back-link/titulos vienen
+         de styles.css. Layout compacto: todo visible sin scroll. */
       .field-label {
         display: block;
-        font-size: 0.82rem;
+        font-size: 0.8rem;
         color: var(--ink-soft);
-        margin-bottom: 8px;
+        margin-bottom: 6px;
+      }
+
+      .inputs-row {
+        display: grid;
+        grid-template-columns: 1fr 150px;
+        gap: 14px;
+        margin-bottom: 14px;
       }
 
       input[type="number"],
       select {
         font-family: "IBM Plex Sans", sans-serif;
-        font-size: 0.95rem;
+        font-size: 0.92rem;
         color: var(--ink);
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 10px;
-        padding: 11px 14px;
-      }
-
-      input[type="number"] {
-        width: 140px;
+        padding: 10px 13px;
+        width: 100%;
       }
 
       select {
-        width: 100%;
-        max-width: 420px;
         appearance: none;
         cursor: pointer;
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23666F6B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
         background-repeat: no-repeat;
-        background-position: right 14px center;
-        padding-right: 38px;
+        background-position: right 13px center;
+        padding-right: 36px;
       }
 
-      .current-card {
+      .prices-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+
+      .price-card {
         background: var(--glass);
         backdrop-filter: blur(24px) saturate(1.2);
         -webkit-backdrop-filter: blur(24px) saturate(1.2);
         border: 1px solid var(--glass-border);
-        border-radius: 18px;
+        border-radius: 14px;
         box-shadow: var(--shadow);
-        padding: 20px 26px;
+        padding: 13px 18px;
         display: flex;
         align-items: baseline;
         justify-content: space-between;
-        gap: 12px;
-        flex-wrap: wrap;
-        margin-bottom: 14px;
+        gap: 10px;
       }
 
-      .current-card .lbl {
-        font-size: 0.85rem;
+      .price-card .lbl {
+        font-size: 0.8rem;
         color: var(--ink-soft);
       }
 
-      .current-card .val {
+      .price-card .val {
         font-family: "IBM Plex Mono", monospace;
-        font-size: 1.55rem;
+        font-size: 1.25rem;
         font-weight: 600;
       }
 
-      .current-card.group {
-        background: rgba(222, 233, 232, 0.82);
+      .price-card.group {
+        background: rgba(222, 233, 232, 0.85);
         border-color: var(--teal-dark);
-        margin-bottom: 26px;
       }
 
       .results {
@@ -129,36 +97,31 @@
         backdrop-filter: blur(24px) saturate(1.2);
         -webkit-backdrop-filter: blur(24px) saturate(1.2);
         border: 1px solid var(--glass-border);
-        border-radius: 18px;
+        border-radius: 14px;
         box-shadow: var(--shadow);
-        padding: 24px 26px;
-        transition: transform 0.18s ease;
-      }
-
-      .result-card:hover {
-        transform: translateY(-2px);
+        padding: 15px 18px;
       }
 
       .result-card.highlight {
-        background: rgba(225, 235, 225, 0.85);
+        background: rgba(225, 235, 225, 0.88);
         border-color: var(--good);
       }
 
       .result-card.highlight.negative {
-        background: rgba(243, 224, 219, 0.85);
+        background: rgba(243, 224, 219, 0.88);
         border-color: var(--over);
       }
 
       .result-label {
-        font-size: 0.8rem;
+        font-size: 0.78rem;
         color: var(--ink-soft);
-        margin-bottom: 8px;
+        margin-bottom: 6px;
       }
 
       .result-value {
         font-family: "Fraunces", serif;
         font-weight: 650;
-        font-size: 2.1rem;
+        font-size: 1.7rem;
       }
 
       .result-card.highlight .result-value {
@@ -170,20 +133,21 @@
       }
 
       .privacy-footnote {
-        margin-top: 26px;
-        font-size: 0.78rem;
+        margin-top: 14px;
+        font-size: 0.76rem;
         color: var(--ink-soft);
-        line-height: 1.5;
-        max-width: 560px;
+        line-height: 1.45;
         background: rgba(255, 255, 255, 0.65);
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
         border-radius: 10px;
-        padding: 10px 14px;
+        padding: 9px 13px;
       }
 
       @media (max-width: 640px) {
-        .results {
+        .results,
+        .prices-row,
+        .inputs-row {
           grid-template-columns: 1fr;
         }
       }
@@ -200,30 +164,31 @@
         Volver al resumen
       </a>
 
-      <h1>Calculadora de ahorro</h1>
+      <h1 class="page-title">Calculadora de ahorro</h1>
       <p class="page-sub">
-        Elige una cantidad para ver cuánto pagarías si tu precio fuera el promedio del grupo, y
-        cuánto ahorrarías frente a lo que pagas ahora.
+        Elige producto y cantidad para ver cuánto ahorrarías pagando el promedio del grupo.
       </p>
 
-      <div class="field-block">
-        <label class="field-label" for="product-select">Producto</label>
-        <select id="product-select"></select>
+      <div class="inputs-row">
+        <div>
+          <label class="field-label" for="product-select">Producto</label>
+          <select id="product-select"></select>
+        </div>
+        <div>
+          <label class="field-label" for="qty-input">Cantidad</label>
+          <input type="number" id="qty-input" min="1" value="10" />
+        </div>
       </div>
 
-      <div class="current-card">
-        <span class="lbl">Lo que pagas actualmente, por unidad</span>
-        <span class="val" id="current-price">—</span>
-      </div>
-
-      <div class="current-card group">
-        <span class="lbl" id="group-label">Promedio del grupo, por unidad</span>
-        <span class="val" id="group-price">—</span>
-      </div>
-
-      <div class="field-block">
-        <label class="field-label" for="qty-input">Cantidad a comprar</label>
-        <input type="number" id="qty-input" min="1" value="10" />
+      <div class="prices-row">
+        <div class="price-card">
+          <span class="lbl">Tú pagas, por unidad</span>
+          <span class="val" id="current-price">—</span>
+        </div>
+        <div class="price-card group">
+          <span class="lbl">Promedio del grupo</span>
+          <span class="val" id="group-price">—</span>
+        </div>
       </div>
 
       <div class="results">

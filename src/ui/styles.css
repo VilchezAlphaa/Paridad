@@ -666,9 +666,9 @@ header {
 
 /* ---------- paginas secundarias (productos, proveedores, ajustes) --- */
 .page {
-  max-width: 960px;
+  max-width: 880px;
   margin: 0 auto;
-  padding: 40px 32px 64px;
+  padding: 26px 28px 44px;
 }
 
 .back-link {
@@ -677,7 +677,7 @@ header {
   gap: 6px;
   font-size: 0.85rem;
   color: var(--ink-soft);
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .back-link:hover {
@@ -687,16 +687,16 @@ header {
 .page-title {
   font-family: "Fraunces", serif;
   font-weight: 650;
-  font-size: 2.2rem;
-  margin: 0 0 8px;
+  font-size: 1.8rem;
+  margin: 0 0 5px;
 }
 
 .page-sub {
-  font-size: 0.98rem;
+  font-size: 0.9rem;
   color: var(--ink-soft);
-  margin: 0 0 28px;
+  margin: 0 0 18px;
   max-width: 620px;
-  line-height: 1.55;
+  line-height: 1.5;
 }
 
 .row-proveedor {
@@ -710,8 +710,9 @@ header {
 .provider-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 16px 22px;
 }
 
 .provider-head {
@@ -743,9 +744,9 @@ header {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 0;
+  padding: 6px 0;
   border-top: 1px solid var(--hairline);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
 }
 
 .provider-item .p-price {
@@ -758,7 +759,7 @@ header {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 15px 0;
+  padding: 10px 0;
   border-top: 1px solid var(--hairline);
 }
 

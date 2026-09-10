@@ -45,6 +45,8 @@ const MOCK_STATE = Object.freeze({
     participants: 3,
   },
 
+  extraction: { status: "DISABLED" },
+
   settings: {
     port: 4700,
     group: "paridad-network-v1",

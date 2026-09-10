@@ -1,16 +1,20 @@
-// Proceso Paridad de UNA laptop: capa de red + ronda de agregacion +
-// servidor LOCAL de la UI (localhost). No es un backend central: cada
-// participante corre el suyo y el intercambio entre negocios va solo
-// por Hyperswarm (shares y column-sums, nunca precios).
+// Proceso Paridad de UNA laptop: extraccion local de facturas (pipeline
+// QVAC de src/extraction) + capa de red + rondas de agregacion + UI
+// local (localhost). No es un backend central: cada participante corre
+// el suyo y el intercambio entre negocios va solo por Hyperswarm
+// (nombres de producto, shares y column-sums; nunca precios ni facturas).
 //
 // Uso:
-//   node nodo-paridad.mjs A --price 4700 [--product "Aceite Motor 20W50"]
-//        [--quantity 4] [--port 4700] [--topic <seed>] [--no-ui]
-//        [--bootstrap '<json>']   (solo tests: DHT local)
+//   node nodo-paridad.mjs A --factura demo-data/facturas/factura-demo-a.png
+//   node nodo-paridad.mjs A --carpeta C:\facturas        (vigila la carpeta)
+//   node nodo-paridad.mjs A --item "aceite motor 20w50:4700:4[:Proveedor]"
+//   node nodo-paridad.mjs A --price 4700 --product "..."  (item unico)
+//   flags extra: --port, --topic, --no-ui, --bootstrap '<json>' (tests),
+//                --ocr-backend cpu|vulkan (por defecto respeta
+//                PARIDAD_OCR_BACKEND; en esta laptop Intel usar cpu)
 //
-// El precio va en CENTAVOS y solo vive en este proceso. La UI se sirve
-// en http://localhost:<port>/ y recibe el estado por SSE (/events); no
-// hay dependencias nuevas (node:http).
+// Los precios van en CENTAVOS y solo viven en este proceso. La UI se
+// sirve en http://localhost:<port>/ con estado en vivo por SSE.
 
 import http from "node:http";
 import fs from "node:fs";
@@ -64,16 +68,22 @@ const topicSeed = argValue("--topic");
 const bootstrapJson = argValue("--bootstrap");
 const withUi = !rest.includes("--no-ui");
 
-const items = itemSpecs.length
+const facturas = rest.flatMap((arg, index) => (arg === "--factura" && rest[index + 1] ? [rest[index + 1]] : []));
+const carpeta = argValue("--carpeta") ?? null;
+const ocrBackend = argValue("--ocr-backend"); // undefined -> default del pipeline (respeta env)
+
+const cliItems = itemSpecs.length
   ? itemSpecs.map(parseItemSpec)
   : priceCents !== undefined && /^\d+$/.test(priceCents)
     ? [{ product, priceCents: BigInt(priceCents), quantity, proveedor: argValue("--proveedor") ?? null }]
-    : null;
+    : [];
 
-if (!items) {
+if (!cliItems.length && !facturas.length && !carpeta) {
   console.error(
-    'Faltan items: --price <centavos> (+ --product) o --item "Nombre:centavos:cantidad[:Proveedor]" repetible.\n' +
-      "En el flujo final saldran del pipeline QVAC local."
+    "Falta al menos una fuente de datos:\n" +
+      "  --factura <imagen>  (extraccion QVAC local)\n" +
+      "  --carpeta <dir>     (vigilar carpeta de facturas)\n" +
+      '  --item "Nombre:centavos:cantidad[:Proveedor]"  |  --price <centavos>'
   );
   process.exit(1);
 }
@@ -87,7 +97,9 @@ const net = new ParidadNetwork(selfName, {
 const runner = new AggregationRunner(net);
 
 console.log(`🟢 Nodo ${selfName} — Paridad`);
-console.log(`   ${items.length} producto(s) local(es); los precios nunca salen de este proceso`);
+console.log(
+  `   ${cliItems.length} item(s) por CLI, ${facturas.length} factura(s)${carpeta ? `, carpeta vigilada: ${carpeta}` : ""} — los precios nunca salen de este proceso`
+);
 
 net.on("state", (s) => {
   console.log(`   [red] ${s.status} — peers identificados: ${s.identifiedPeers.join(", ") || "ninguno"}`);
@@ -104,7 +116,134 @@ runner.on("result", (result) => {
 });
 
 net.start();
-runner.setItems(items);
+
+// Items vivos del nodo (CLI + los que produzca la extraccion de
+// facturas). La clave de ronda es el nombre canonico del producto.
+const liveItems = [...cliItems];
+if (liveItems.length) runner.setItems(liveItems);
+
+// --- extraccion local de facturas (pipeline QVAC de Pablo) ------------------
+//
+// Se importa en diferido: un nodo sin --factura/--carpeta no carga el
+// SDK de QVAC. El pipeline corre EN este proceso (no usa el servidor
+// http de QVAC) y tiene respaldo automatico a CPU si la GPU falla.
+
+let extraction = null; // estado para la UI; null = extraccion no activada
+let extractionQueue = Promise.resolve();
+const processedFiles = new Set();
+
+function upsertItem(nuevo) {
+  const index = liveItems.findIndex((item) => item.product === nuevo.product);
+  if (index === -1) liveItems.push(nuevo);
+  else liveItems[index] = nuevo;
+  runner.setItems(liveItems);
+}
+
+async function startExtraction() {
+  extraction = {
+    status: "LOADING_AI", // LOADING_AI | READY | PROCESSING | ERROR
+    currentFile: null,
+    steps: null,
+    processed: 0,
+    folder: carpeta,
+    error: null,
+  };
+  localAiStatus = "LOADING";
+  broadcastUiState();
+
+  const pipeline = await import("./src/extraction/invoice-pipeline.mjs");
+  const sesion = await pipeline.loadPipeline(ocrBackend ? { backendDevice: ocrBackend } : {});
+  console.log(`   [ia] pipeline QVAC cargado (OCR en ${sesion.ocrBackend})`);
+  localAiStatus = "ACTIVE";
+  extraction.status = "READY";
+  broadcastUiState();
+
+  async function procesarFactura(ruta) {
+    const nombre = path.basename(ruta);
+    extraction.status = "PROCESSING";
+    extraction.currentFile = nombre;
+    extraction.steps = { cargada: true, ia: true, producto: false, precio: false };
+    extraction.error = null;
+    broadcastUiState();
+    console.log(`   [ia] procesando ${nombre}...`);
+
+    try {
+      const resultado = await pipeline.extractInvoice({ sesion, imagePath: ruta });
+      const errores = pipeline.validateExtraction(resultado);
+      if (errores.length) throw new Error(errores.join("; "));
+
+      extraction.steps.producto = true;
+      extraction.steps.precio = true;
+      extraction.processed++;
+
+      // La factura, el texto OCR y todo lo de _local se quedan aqui.
+      upsertItem({
+        product: resultado.product_canonical,
+        display: resultado.product,
+        priceCents: BigInt(resultado.unit_price_cents),
+        quantity: resultado.quantity,
+        proveedor: null,
+      });
+      console.log(
+        `   [ia] ${nombre}: "${resultado.product_canonical}" x${resultado.quantity} — precio extraido localmente (no se muestra en logs de red)`
+      );
+    } catch (err) {
+      extraction.error = `${nombre}: ${err.message}`;
+      console.warn(`   ⚠️  [ia] fallo extrayendo ${nombre}: ${err.message}`);
+    } finally {
+      extraction.status = "READY";
+      extraction.currentFile = null;
+      broadcastUiState();
+    }
+  }
+
+  function encolarFactura(ruta) {
+    const clave = path.normalize(ruta).toLowerCase();
+    if (processedFiles.has(clave)) return;
+    processedFiles.add(clave);
+    extractionQueue = extractionQueue.then(() => procesarFactura(ruta));
+  }
+
+  for (const ruta of facturas) encolarFactura(path.resolve(ruta));
+
+  if (carpeta) {
+    const dir = path.resolve(carpeta);
+    // Al arrancar se procesan las facturas que ya esten en la carpeta...
+    for (const nombre of fs.readdirSync(dir)) {
+      if (/\.(png|jpe?g)$/i.test(nombre)) encolarFactura(path.join(dir, nombre));
+    }
+    // ...y despues se vigila para detectar las nuevas. El debounce da
+    // tiempo a que el archivo termine de copiarse.
+    const pendientes = new Map();
+    fs.watch(dir, (_event, nombre) => {
+      if (!nombre || !/\.(png|jpe?g)$/i.test(nombre)) return;
+      clearTimeout(pendientes.get(nombre));
+      pendientes.set(
+        nombre,
+        setTimeout(() => {
+          pendientes.delete(nombre);
+          const ruta = path.join(dir, nombre);
+          if (fs.existsSync(ruta)) encolarFactura(ruta);
+        }, 1500)
+      );
+    });
+    console.log(`   [ia] vigilando carpeta de facturas: ${dir}`);
+  }
+}
+
+if (facturas.length || carpeta) {
+  // setImmediate: el resto del modulo (estado de UI, servidor) debe
+  // terminar de evaluarse antes de que la extraccion toque ese estado.
+  setImmediate(() => void startExtraction().catch((err) => {
+    if (extraction) {
+      extraction.status = "ERROR";
+      extraction.error = err.message;
+    }
+    localAiStatus = "OFFLINE";
+    broadcastUiState();
+    console.error(`   💥 [ia] no se pudo iniciar el pipeline de extraccion: ${err.message}`);
+  }));
+}
 
 // --- chequeos de entorno (solo lectura, para las tiles de la UI) ------------
 
@@ -112,13 +251,18 @@ let localAiStatus = "OFFLINE";
 let internetStatus = "OFFLINE";
 
 async function checkEnvironment() {
-  try {
-    const res = await fetch("http://127.0.0.1:11434/v1/models", {
-      signal: AbortSignal.timeout(1500),
-    });
-    localAiStatus = res.ok ? "ACTIVE" : "OFFLINE";
-  } catch {
-    localAiStatus = "OFFLINE";
+  // Con el pipeline de extraccion activo, el estado de la IA local lo
+  // gobierna el propio pipeline (in-process); el chequeo del servidor
+  // http de QVAC solo aplica cuando no hay extraccion.
+  if (extraction === null) {
+    try {
+      const res = await fetch("http://127.0.0.1:11434/v1/models", {
+        signal: AbortSignal.timeout(1500),
+      });
+      localAiStatus = res.ok ? "ACTIVE" : "OFFLINE";
+    } catch {
+      localAiStatus = "OFFLINE";
+    }
   }
 
   try {
@@ -146,6 +290,7 @@ function buildUiState() {
 
   const uiItems = round.items.map((item) => ({
     product: item.product,
+    display: item.display ?? item.product,
     quantity: item.quantity,
     proveedor: item.proveedor,
     unitPrice: item.unitPriceCents / 100,
@@ -191,12 +336,12 @@ function buildUiState() {
       totalItems: uiItems.length,
       participants: net.participants.length,
     },
+    extraction: extraction ?? { status: "DISABLED" },
     settings: {
       port,
       group: topicSeed ?? "paridad-network-v1",
       participants: net.participants,
-      // La carpeta vigilada llegara con la integracion del pipeline QVAC.
-      invoiceFolder: null,
+      invoiceFolder: carpeta,
     },
   };
 }

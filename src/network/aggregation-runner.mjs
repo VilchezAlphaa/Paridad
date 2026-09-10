@@ -77,6 +77,7 @@ export class AggregationRunner extends EventEmitter {
   setItems(items) {
     this.items = items.map((item) => ({
       product: item.product,
+      display: item.display ?? item.product,
       priceCents: BigInt(item.priceCents),
       quantity: item.quantity ?? 1,
       proveedor: item.proveedor ?? null,
@@ -117,6 +118,7 @@ export class AggregationRunner extends EventEmitter {
         const result = this.results.get(item.product) ?? null;
         return {
           product: item.product,
+          display: item.display,
           quantity: item.quantity,
           proveedor: item.proveedor,
           unitPriceCents: Number(item.priceCents),

@@ -53,7 +53,7 @@ export function buildItemRow(item, index, { showProveedor = false } = {}) {
   chip.textContent = item.product.slice(0, 3);
   const prodName = document.createElement("span");
   prodName.className = "prod-name";
-  prodName.textContent = item.product;
+  prodName.textContent = item.display ?? item.product;
   nameWrap.append(chip, prodName);
   if (showProveedor && item.proveedor) {
     const prov = document.createElement("span");
