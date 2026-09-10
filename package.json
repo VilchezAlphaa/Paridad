@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run test:privacy && npm run test:network",
+    "test:privacy": "node src/privacy/test-secret-sharing.mjs && node src/privacy/test-aggregation-protocol.mjs",
+    "test:network": "node src/network/test-paridad-network.mjs",
+    "ui": "npx -y serve -l 4173 ."
   },
   "keywords": [],
   "author": "",

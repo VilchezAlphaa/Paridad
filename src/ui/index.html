@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paridad</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="mock-banner" class="mock-banner" hidden>
+      DATOS DE PRUEBA (MOCK) &mdash; todavia no conectado a la red ni a QVAC
+    </div>
+
+    <header class="header">
+      <h1>PARIDAD</h1>
+      <p class="tagline">Benchmark de precios entre negocios, sin revelar lo que pagas.</p>
+    </header>
+
+    <main class="dashboard">
+      <section class="status-grid" aria-label="Estado del sistema">
+        <div class="stat-tile" id="stat-peers">
+          <span class="stat-label">PEERS</span>
+          <span class="stat-value" id="val-peers">&mdash;</span>
+        </div>
+        <div class="stat-tile" id="stat-p2p">
+          <span class="stat-label">P2P</span>
+          <span class="stat-value" id="val-p2p">&mdash;</span>
+        </div>
+        <div class="stat-tile" id="stat-internet">
+          <span class="stat-label">INTERNET</span>
+          <span class="stat-value" id="val-internet">&mdash;</span>
+        </div>
+        <div class="stat-tile" id="stat-local-ai">
+          <span class="stat-label">LOCAL AI</span>
+          <span class="stat-value" id="val-local-ai">&mdash;</span>
+        </div>
+        <div class="stat-tile" id="stat-shared">
+          <span class="stat-label">SHARES ENVIADOS</span>
+          <span class="stat-value" id="val-shared">&mdash;</span>
+        </div>
+      </section>
+
+      <section class="panel privacy-panel">
+        <h2>Privacidad</h2>
+        <p id="privacy-note">&mdash;</p>
+      </section>
+
+      <section class="panel invoice-panel">
+        <h2>Factura</h2>
+        <div class="invoice-drop" id="invoice-drop">
+          <span id="invoice-filename">Ningun archivo cargado</span>
+          <button type="button" id="invoice-upload-btn" disabled>
+            Subir factura (no conectado aun)
+          </button>
+        </div>
+        <table class="invoice-items">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Cantidad</th>
+              <th>Precio unitario</th>
+            </tr>
+          </thead>
+          <tbody id="invoice-items-body">
+            <tr>
+              <td colspan="3">Sin datos</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="panel benchmark-panel">
+        <h2>Resultado del benchmark</h2>
+        <dl class="benchmark-grid">
+          <dt>Tu precio</dt>
+          <dd id="bm-your-price">&mdash;</dd>
+
+          <dt>Promedio del grupo</dt>
+          <dd id="bm-group-average">&mdash;</dd>
+
+          <dt>Tu posicion</dt>
+          <dd id="bm-position">&mdash;</dd>
+
+          <dt>Participantes</dt>
+          <dd id="bm-participants">&mdash;</dd>
+        </dl>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
