@@ -136,18 +136,20 @@ try {
   const t0 = Date.now();
   modelos = await loadPipeline();
   console.log(`▸ Modelos cargados en ${((Date.now() - t0) / 1000).toFixed(1)}s`);
-  console.log(`  OCR: ${modelos.ocrModelId}   LLM: ${modelos.llmModelId}\n`);
+  console.log(`  OCR: ${modelos.ocrModelId} (backend: ${modelos.ocrBackend})   LLM: ${modelos.llmModelId}\n`);
 
   let fallos = 0;
 
   for (const esperado of FACTURAS_DEMO) {
     const imagePath = path.join(facturasDir, esperado.archivo);
-    const resultado = await extractInvoice({ ...modelos, imagePath });
+    const resultado = await extractInvoice({ sesion: modelos, imagePath });
 
     const errores = validateExtraction(resultado);
-    const { msOcr, msLlm } = resultado._local;
+    const { msOcr, msLlm, ocrBackend } = resultado._local;
 
-    console.log(`▸ ${esperado.archivo}  (OCR ${(msOcr / 1000).toFixed(1)}s · LLM ${(msLlm / 1000).toFixed(1)}s)`);
+    console.log(
+      `▸ ${esperado.archivo}  (OCR ${(msOcr / 1000).toFixed(1)}s en ${ocrBackend} · LLM ${(msLlm / 1000).toFixed(1)}s)`
+    );
     console.log(`  ${JSON.stringify({
       product: resultado.product,
       quantity: resultado.quantity,

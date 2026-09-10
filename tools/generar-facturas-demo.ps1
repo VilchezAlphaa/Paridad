@@ -14,16 +14,31 @@
 #   - "20W50" se leía "20h50";
 #   - "47.00" se partía en dos bloques "47" y "00", perdiendo el decimal.
 # Subir magRatio en el OCR NO lo arreglaba (solo triplicaba la latencia).
-# Renderizar a escala 2.1 sí: los tres se leen correctamente. Por eso las
-# imágenes se generan grandes. Ver README para el detalle.
+#
+# La escala 1.4 se eligió con el barrido de tools/bench-ocr.mjs: combinada con
+# canvasSize 1280 lee correctamente las tres facturas y es ~22x más rápida que
+# la escala 2.1 que se usaba antes. Además está en una REGIÓN estable (canvas
+# 1152, 1280 y 1400 leen bien las tres), a diferencia de la escala 2.1, donde
+# canvas 1920 acierta pero 1600, 2100 y 1280 fallan.
+# Ver docs/pipeline-extraccion.md para la tabla completa.
 # --------------------------------------------------------------------------
+
+param(
+  # Escala de render. El valor por defecto es el que usa el proyecto; se puede
+  # sobreescribir para hacer barridos de rendimiento del OCR.
+  [double]$Escala = 1.4,
+  [string]$OutDir = ""
+)
 
 Add-Type -AssemblyName System.Drawing
 
-$outDir = Join-Path $PSScriptRoot "..\demo-data\facturas"
+if ([string]::IsNullOrWhiteSpace($OutDir)) {
+  $OutDir = Join-Path $PSScriptRoot "..\demo-data\facturas"
+}
+$outDir = $OutDir
 New-Item -ItemType Directory -Force $outDir | Out-Null
 
-$s = 2.1  # escala de render (ver nota arriba)
+$s = $Escala
 
 # Datos SINTÉTICOS. Negocios, RUC, clientes y proveedores son inventados.
 # Los precios unitarios coinciden con DEMO_PRICES de p2p-privacy-test.mjs

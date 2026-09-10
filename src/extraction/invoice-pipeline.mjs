@@ -24,21 +24,48 @@ import {
 } from "@qvac/sdk";
 
 /**
- * Configuración del OCR, medida empíricamente contra las facturas de demo
- * (ver tools/generar-facturas-demo.ps1 y docs/pipeline-extraccion.md).
+ * Configuración del OCR, elegida con el barrido de tools/bench-ocr.mjs sobre
+ * las tres facturas de demo (tabla completa en docs/pipeline-extraccion.md).
  *
- * magRatio 1.2 es un punto medio deliberado sobre estas imágenes:
- *   - 1.5 leía la cantidad "6" como "0" en factura-demo-b;
- *   - 1.0 es ~30% más rápido pero se saltaba algunos importes de total;
- *   - 1.2 lee bien cantidad y precio unitario en las tres facturas.
+ *   canvasSize 1280   recorta el canvas de detección. Es la variable que más
+ *                     pesa en el tiempo. Combinada con imágenes a escala 1.4
+ *                     está en una REGIÓN estable: canvas 1152, 1280 y 1400
+ *                     leen bien las tres facturas. Se elige 1280 por tener
+ *                     vecinos verificados a ambos lados, no por ser el más
+ *                     rápido.
+ *   recognizerBatchSize 32   es el DEFAULT de QVAC. Antes estaba en 1, copiado
+ *                     del ejemplo del SDK, lo que obligaba al reconocedor a
+ *                     procesar las ~31 cajas de una en una.
+ *   defaultRotationAngles []   desactiva los reintentos rotados. El default de
+ *                     QVAC es [90, 270]; nuestras facturas nunca están giradas.
+ *   lowConfidenceThreshold 0.4   es el DEFAULT de QVAC. Antes estaba en 0.5,
+ *                     un umbral MÁS alto, que marcaba más cajas como dudosas y
+ *                     disparaba más reintentos.
+ *   magRatio 1.2      se mantiene: 1.5 leía la cantidad "6" como "0" y 1.0
+ *                     leía "20W50" como "20150".
  */
 export const OCR_MODEL_CONFIG = {
   langList: ["es", "en"],
   magRatio: 1.2,
+  canvasSize: 1280,
+  defaultRotationAngles: [],
   contrastRetry: false,
-  lowConfidenceThreshold: 0.5,
-  recognizerBatchSize: 1,
+  lowConfidenceThreshold: 0.4,
+  recognizerBatchSize: 32,
 };
+
+/**
+ * Backend de cómputo del OCR.
+ *
+ * Vulkan sobre la iGPU baja el OCR de ~14,4 s a ~2,8 s por factura. Pero el
+ * detector CRAFT revienta con `ggml_gallocr_alloc_graph failed` si el canvas
+ * es grande (falla a 1920 y 2560 en una iGPU de ~1 GB) y ese fallo NO cae
+ * elegantemente a CPU por sí solo: mata la operación. Por eso el pipeline
+ * reintenta en CPU (ver ocrInvoiceConRespaldo).
+ *
+ * Se puede forzar con PARIDAD_OCR_BACKEND=cpu, útil si la GPU está ocupada.
+ */
+export const OCR_BACKEND_PREFERIDO = process.env.PARIDAD_OCR_BACKEND ?? "vulkan";
 
 /**
  * Schema que se le impone al modelo por gramática (GBNF) vía responseFormat.
@@ -191,19 +218,26 @@ export function priceStringToCents(precio) {
  * Devuelve los ids para poder reutilizarlos entre facturas (cargar el modelo
  * es lo caro; procesar una factura más no lo es).
  */
-export async function loadPipeline({ onProgress } = {}) {
-  const ocrModelId = await loadModel({
+function cargarModeloOcr(backendDevice, onProgress) {
+  return loadModel({
     modelSrc: OCR_LATIN,
-    modelConfig: OCR_MODEL_CONFIG,
+    modelConfig: { ...OCR_MODEL_CONFIG, backendDevice },
     onProgress,
   });
+}
+
+export async function loadPipeline({ onProgress, backendDevice = OCR_BACKEND_PREFERIDO } = {}) {
+  const ocrModelId = await cargarModeloOcr(backendDevice, onProgress);
 
   const llmModelId = await loadModel({
     modelSrc: QWEN3_600M_INST_Q4,
     onProgress,
   });
 
-  return { ocrModelId, llmModelId };
+  // El objeto devuelto es la SESIÓN del pipeline y es mutable: si la GPU falla
+  // a mitad de una ronda, ocrInvoiceConRespaldo sustituye el modelo OCR por uno
+  // en CPU y actualiza estos campos.
+  return { ocrModelId, llmModelId, ocrBackend: backendDevice, onProgress };
 }
 
 export async function unloadPipeline({ ocrModelId, llmModelId }) {
@@ -259,19 +293,55 @@ export async function extractStructured({ llmModelId, texto }) {
 }
 
 /**
+ * OCR con respaldo a CPU.
+ *
+ * Si el backend acelerado falla —lo típico en una iGPU con poca VRAM: el
+ * detector CRAFT no consigue asignar su grafo— se recarga el modelo en CPU y
+ * se reintenta UNA vez, mutando la sesión para que las siguientes facturas ya
+ * usen CPU directamente.
+ *
+ * El respaldo es a CPU LOCAL. No existe ningún respaldo a servicios de
+ * inferencia externos (CLAUDE.md §26).
+ */
+export async function ocrInvoiceConRespaldo(sesion, imagePath) {
+  try {
+    return await ocrInvoice({ ocrModelId: sesion.ocrModelId, imagePath });
+  } catch (err) {
+    if (sesion.ocrBackend === "cpu") throw err;
+
+    console.warn(
+      `⚠️  OCR en "${sesion.ocrBackend}" falló (${err.message}). Recargando el modelo en CPU y reintentando.`
+    );
+
+    try {
+      await unloadModel({ modelId: sesion.ocrModelId, clearStorage: false });
+    } catch {
+      // El modelo pudo quedar inutilizable tras el fallo; da igual, se reemplaza.
+    }
+
+    sesion.ocrModelId = await cargarModeloOcr("cpu", sesion.onProgress);
+    sesion.ocrBackend = "cpu";
+
+    return ocrInvoice({ ocrModelId: sesion.ocrModelId, imagePath });
+  }
+}
+
+/**
  * Pipeline completo para una factura.
  *
  * Devuelve el objeto con el schema público de Paridad:
  *   { product, quantity, unit_price_cents }
  * más metadatos locales que NO deben cruzar la frontera P2P.
+ *
+ * `sesion` es lo que devuelve loadPipeline().
  */
-export async function extractInvoice({ ocrModelId, llmModelId, imagePath }) {
+export async function extractInvoice({ sesion, imagePath }) {
   const t0 = Date.now();
-  const { texto, lineas } = await ocrInvoice({ ocrModelId, imagePath });
+  const { texto, lineas } = await ocrInvoiceConRespaldo(sesion, imagePath);
   const msOcr = Date.now() - t0;
 
   const t1 = Date.now();
-  const crudo = await extractStructured({ llmModelId, texto });
+  const crudo = await extractStructured({ llmModelId: sesion.llmModelId, texto });
   const msLlm = Date.now() - t1;
 
   return {
@@ -282,7 +352,7 @@ export async function extractInvoice({ ocrModelId, llmModelId, imagePath }) {
     // --- derivado local ---
     product_canonical: normalizeProduct(repairOcrText(crudo.product)),
     // --- solo local: nunca se envía por la red ---
-    _local: { texto, lineas, msOcr, msLlm },
+    _local: { texto, lineas, msOcr, msLlm, ocrBackend: sesion.ocrBackend },
   };
 }
 
