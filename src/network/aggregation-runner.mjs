@@ -58,6 +58,11 @@ export class AggregationRunner extends EventEmitter {
     // producto -> resultado final
     this.results = new Map();
 
+    // Peers a los que ya les mandamos NUESTRA lista de productos vigente.
+    // Sin esto, responder a un "products" con otro "products" se convierte
+    // en un eco infinito entre los tres nodos (ver _announceProducts).
+    this._announcedTo = new Set();
+
     this.sharesSent = 0;
 
     // Mensajes que llegan antes de que este nodo este listo para
@@ -82,6 +87,8 @@ export class AggregationRunner extends EventEmitter {
       quantity: item.quantity ?? 1,
       proveedor: item.proveedor ?? null,
     }));
+    // La lista cambio (p. ej. una factura nueva): hay que reenviarla.
+    this._announcedTo.clear();
     this._announceProducts();
     this._maybeStartSessions();
     this.emit("update");
@@ -139,15 +146,40 @@ export class AggregationRunner extends EventEmitter {
     this.sessions.clear();
     this._pendingShares.clear();
     this._pendingColumnSums.clear();
+    // La red volvio a estar completa: puede haber entrado un peer que
+    // nunca recibio nuestra lista, asi que se reenvia a todos.
+    this._announcedTo.clear();
 
     this._announceProducts();
     this._maybeStartSessions();
   }
 
+  /**
+   * Manda nuestra lista de productos a los peers que todavia no la tienen.
+   *
+   * Es idempotente A PROPOSITO. Antes hacia un broadcast incondicional, y
+   * como al recibir un "products" se responde con otro "products" (para
+   * cubrir el caso de que nuestro anuncio anterior no llegara), cada
+   * mensaje recibido generaba dos salientes y cada uno de esos otros dos
+   * en el receptor: un eco que se realimenta y no para nunca. Medido: 2,6
+   * millones de mensajes "products" por nodo en 80 s, ~480 MB atascados en
+   * los buffers de escritura y muerte por falta de memoria.
+   *
+   * Con el registro de a quien ya se le mando, la reparacion sigue
+   * existiendo (si el envio fallo, el peer no queda marcado y se reintenta)
+   * pero el intercambio converge: una lista por peer y ronda.
+   */
   _announceProducts() {
     if (!this.items) return;
     if (this.net.status !== NETWORK_STATE.READY_FOR_AGGREGATION) return;
-    this.net.broadcast("products", { products: this.items.map((item) => item.product) });
+
+    const products = this.items.map((item) => item.product);
+    for (const peer of this.net.peers) {
+      if (this._announcedTo.has(peer)) continue;
+      if (this.net.send(peer, "products", { products })) {
+        this._announcedTo.add(peer);
+      }
+    }
   }
 
   _haveAllPeerLists() {
