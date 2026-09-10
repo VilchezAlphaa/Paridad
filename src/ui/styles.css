@@ -19,7 +19,12 @@
   --good-soft: #e1ebe1;
   --over: #a5432f;
   --over-soft: #f3e0db;
-  --shadow: 0 1px 2px rgba(30, 35, 33, 0.04), 0 10px 30px rgba(30, 35, 33, 0.06);
+  /* Acabado tipo vidrio: sombra difusa amplia + filo de luz superior. */
+  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 1px 1px rgba(30, 35, 33, 0.03),
+    0 16px 40px rgba(30, 35, 33, 0.1);
+  --glass: rgba(255, 255, 255, 0.74);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --hairline: rgba(30, 35, 33, 0.08);
 }
 
 * {
@@ -67,7 +72,7 @@ body::after {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(rgba(241, 238, 227, 0.3), rgba(241, 238, 227, 0.16));
+  background: linear-gradient(rgba(241, 238, 227, 0.8), rgba(241, 238, 227, 0.66));
 }
 
 a {
@@ -213,11 +218,11 @@ header {
 }
 
 .panel {
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(14px) saturate(1.15);
-  -webkit-backdrop-filter: blur(14px) saturate(1.15);
-  border: 1px solid rgba(226, 220, 203, 0.85);
-  border-radius: 18px;
+  background: var(--glass);
+  backdrop-filter: blur(28px) saturate(1.2);
+  -webkit-backdrop-filter: blur(28px) saturate(1.2);
+  border: 1px solid var(--glass-border);
+  border-radius: 22px;
   padding: 20px 26px;
   box-shadow: var(--shadow);
 }
@@ -282,7 +287,7 @@ header {
   column-gap: 16px;
   padding: 8px 0 8px 16px;
   margin-left: -16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--hairline);
   border-left: 4px solid transparent;
 }
 
@@ -405,13 +410,18 @@ header {
 }
 
 .kpi-card {
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(14px) saturate(1.15);
-  -webkit-backdrop-filter: blur(14px) saturate(1.15);
-  border: 1px solid rgba(226, 220, 203, 0.85);
-  border-radius: 16px;
+  background: var(--glass);
+  backdrop-filter: blur(28px) saturate(1.2);
+  -webkit-backdrop-filter: blur(28px) saturate(1.2);
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
   padding: 15px 20px;
   box-shadow: var(--shadow);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
 }
 
 .kpi-label {
@@ -459,11 +469,11 @@ header {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(12px) saturate(1.15);
-  -webkit-backdrop-filter: blur(12px) saturate(1.15);
-  border: 1px solid rgba(226, 220, 203, 0.85);
-  border-radius: 12px;
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  border: 1px solid var(--glass-border);
+  border-radius: 13px;
   padding: 9px 15px;
   box-shadow: var(--shadow);
   min-width: 0;
@@ -529,10 +539,11 @@ header {
 }
 
 .privacy-panel {
-  background: rgba(26, 52, 54, 0.88);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-color: rgba(26, 52, 54, 0.6);
+  background: rgba(26, 52, 54, 0.82);
+  backdrop-filter: blur(24px) saturate(1.15);
+  -webkit-backdrop-filter: blur(24px) saturate(1.15);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 16px 40px rgba(30, 35, 33, 0.18);
 }
 
 .privacy-panel .privacy-title {
@@ -568,10 +579,10 @@ header {
 
 .opt-card {
   position: relative;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(12px) saturate(1.15);
-  -webkit-backdrop-filter: blur(12px) saturate(1.15);
-  border: 1px solid rgba(226, 220, 203, 0.85);
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  border: 1px solid var(--glass-border);
   border-radius: 20px;
   display: flex;
   flex-direction: column;
@@ -582,11 +593,13 @@ header {
   padding: 14px 12px;
   cursor: pointer;
   box-shadow: var(--shadow);
-  transition: transform 0.12s ease, border-color 0.15s ease;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
 }
 
 .opt-card:hover {
-  border-color: var(--copper);
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(255, 255, 255, 0.85);
 }
 
 .opt-card:active {
