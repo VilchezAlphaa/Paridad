@@ -1,8 +1,9 @@
 // Renderizador de la UI de Paridad. No sabe de Hyperswarm ni de QVAC:
 // solo recibe un estado (via una fuente con subscribe(callback)) y lo
-// pinta. Hoy la fuente es mockDataSource; cuando exista la fuente real
-// respaldada por ParidadNetwork, se cambia solo este import.
+// pinta. Si la pagina la sirve nodo-paridad.mjs usa la fuente real
+// (SSE); si se sirve como estaticos (`npm run ui`), cae al mock.
 import { mockDataSource } from "./mock-data.js";
+import { realDataSource, isServedByParidadNode } from "./real-data-source.js";
 import { NETWORK_STATE } from "../network/network-state.mjs";
 
 const $ = (id) => document.getElementById(id);
@@ -110,4 +111,5 @@ function render(state) {
   renderBenchmark(state.benchmark);
 }
 
-mockDataSource.subscribe(render);
+const dataSource = (await isServedByParidadNode()) ? realDataSource : mockDataSource;
+dataSource.subscribe(render);

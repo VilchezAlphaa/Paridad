@@ -4,9 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "npm run test:privacy && npm run test:network",
+    "test": "npm run test:privacy && npm run test:network && npm run test:e2e",
     "test:privacy": "node src/privacy/test-secret-sharing.mjs && node src/privacy/test-aggregation-protocol.mjs",
     "test:network": "node src/network/test-paridad-network.mjs",
+    "test:e2e": "node src/network/test-aggregation-e2e.mjs",
+    "demo": "node demo-local.mjs",
     "ui": "npx -y serve -l 4173 ."
   },
   "keywords": [],
