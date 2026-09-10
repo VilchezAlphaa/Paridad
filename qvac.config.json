@@ -1,0 +1,10 @@
+{
+  "serve": {
+    "models": {
+      "qwen3-600m-inst-q4": {
+        "model": "QWEN3_600M_INST_Q4",
+        "preload": true
+      }
+    }
+  }
+}
