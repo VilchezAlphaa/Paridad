@@ -66,6 +66,12 @@ function parseItemSpec(spec) {
 const port = Number(argValue("--port") ?? 4700);
 const topicSeed = argValue("--topic");
 const bootstrapJson = argValue("--bootstrap");
+// Alternativa a --bootstrap sin JSON: evita el infierno de escapado de
+// comillas al pasar el flag entre distintas shells (PowerShell en
+// particular reescribe las comillas de un argumento nativo y rompe el
+// JSON). Uso real (laptops, LAN): --bootstrap-host/--bootstrap-port.
+const bootstrapHost = argValue("--bootstrap-host");
+const bootstrapPortArg = argValue("--bootstrap-port");
 const withUi = !rest.includes("--no-ui");
 
 const facturas = rest.flatMap((arg, index) => (arg === "--factura" && rest[index + 1] ? [rest[index + 1]] : []));
@@ -90,9 +96,15 @@ if (!cliItems.length && !facturas.length && !carpeta) {
 
 // --- red + ronda ------------------------------------------------------------
 
+const bootstrap = bootstrapHost
+  ? [{ host: bootstrapHost, port: Number(bootstrapPortArg ?? 49738) }]
+  : bootstrapJson
+    ? JSON.parse(bootstrapJson)
+    : null;
+
 const net = new ParidadNetwork(selfName, {
   ...(topicSeed ? { topicSeed } : {}),
-  ...(bootstrapJson ? { bootstrap: JSON.parse(bootstrapJson) } : {}),
+  ...(bootstrap ? { bootstrap } : {}),
 });
 const runner = new AggregationRunner(net);
 

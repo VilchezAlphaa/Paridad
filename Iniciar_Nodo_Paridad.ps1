@@ -41,7 +41,6 @@ if ($partes.Count -ne 2) {
 }
 $bootstrapHost = $partes[0]
 $bootstrapPort = $partes[1]
-$bootstrapJson = "[{`"host`":`"$bootstrapHost`",`"port`":$bootstrapPort}]"
 
 # Mismo topic en las 3 laptops para que se encuentren en el mismo "canal".
 # Fijo por defecto para no tener que coordinarlo a mano; cambialo si vas a
@@ -64,6 +63,6 @@ Start-Job -ScriptBlock {
     Start-Process "http://localhost:4700"
 } | Out-Null
 
-node nodo-paridad.mjs $nombre --port 4700 --topic $topic --bootstrap $bootstrapJson --factura $factura --ocr-backend cpu
+node nodo-paridad.mjs $nombre --port 4700 --topic $topic --bootstrap-host $bootstrapHost --bootstrap-port $bootstrapPort --factura $factura --ocr-backend cpu
 
 Read-Host "El nodo se detuvo. Presiona Enter para cerrar"
