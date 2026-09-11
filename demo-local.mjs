@@ -10,7 +10,9 @@
 // shares y sumas parciales.
 //
 //   npm run demo            procesa las facturas automaticamente
-//   npm run demo:manual     espera a que pulses "Procesar facturas" en cada UI
+//   npm run demo:manual     MODO GRABACION: los 3 nodos arrancan SIN facturas y
+//                           en la pantalla inicial; tu arrastras o eliges la
+//                           factura en cada UI y el flujo real sigue desde ahi
 //   npm run demo:items      demo de red con 5 productos por CLI (sin OCR)
 //
 // Abre despues:  A http://localhost:4700   B :4701   C :4702
@@ -24,6 +26,7 @@
 // que en ningun momento hay dos OCR compitiendo. En la demo real cada
 // participante esta en su propia laptop y esto no aplica.
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import createTestnet from "hyperdht/testnet.js";
@@ -51,7 +54,12 @@ const NODES = [
 // Historial de la demo aparte del de uso real (data/nodo-X). Se conserva
 // entre corridas: como cada factura se identifica por su contenido,
 // repetir la demo no duplica registros. Borra data/demo/ para empezar de cero.
-const datosDemoDir = path.join(__dirname, "data", "demo");
+//
+// El modo manual usa OTRO directorio y lo vacia al arrancar: una grabacion
+// tiene que empezar en la pantalla inicial, no con los resultados de la
+// corrida anterior.
+const datosDemoDir = path.join(__dirname, "data", manual ? "demo-manual" : "demo");
+if (manual) fs.rmSync(datosDemoDir, { recursive: true, force: true });
 
 // Margen amplio: la primera vez QVAC puede tener que descargar modelos.
 const ESPERA_MAX_EXTRACCION_MS = 240_000;
@@ -65,7 +73,9 @@ console.log(`   Facturas: ${facturasDir}`);
 console.log(`   Historial local de cada nodo: ${path.join(datosDemoDir, "nodo-<X>", "historial.json")}`);
 console.log(
   manual
-    ? "   Modo manual: pulsa «Procesar facturas» en cada UI, DE UNA EN UNA.\n"
+    ? "   MODO GRABACION: los nodos arrancan sin facturas. Abre cada UI y arrastra o elige\n" +
+      "   la factura de ese nodo. En una sola maquina, hazlo DE UNO EN UNO: espera a que un\n" +
+      "   nodo termine (libera la GPU) antes de cargar la siguiente.\n"
     : "   Cada nodo procesa su factura y libera la GPU antes de que arranque el siguiente.\n"
 );
 
@@ -81,8 +91,7 @@ function lanzarNodo({ name, port, facturas }) {
       "--topic", topicSeed,
       "--bootstrap", bootstrapJson,
       "--datos", path.join(datosDemoDir, `nodo-${name}`),
-      ...facturas.flatMap((f) => ["--factura", path.join(facturasDir, f)]),
-      ...(manual ? ["--manual"] : []),
+      ...(manual ? [] : facturas.flatMap((f) => ["--factura", path.join(facturasDir, f)])),
     ],
     { stdio: ["ignore", "pipe", "pipe"] }
   );
@@ -121,12 +130,20 @@ function esperarExtraccion(nodo) {
 
 for (const config of NODES) {
   const nodo = lanzarNodo(config);
-  if (manual) continue; // en manual el ritmo lo marca quien pulsa los botones
+  if (manual) continue; // en manual el ritmo lo marca quien carga las facturas
   await esperarExtraccion(nodo);
 }
 
-console.log("\n✅ Los tres nodos tienen su dato local. La agregacion P2P corre sola.");
-console.log("   UI:  A http://localhost:4700   B http://localhost:4701   C http://localhost:4702\n");
+if (manual) {
+  console.log("\n🎥 Nodos listos y esperando en la pantalla inicial.");
+  console.log("   A http://localhost:4700  ← arrastra factura-demo-multi.png");
+  console.log("   B http://localhost:4701  ← arrastra factura-demo-b.png");
+  console.log("   C http://localhost:4702  ← arrastra factura-demo-c.png");
+  console.log(`   Las facturas estan en: ${facturasDir}\n`);
+} else {
+  console.log("\n✅ Los tres nodos tienen su dato local. La agregacion P2P corre sola.");
+  console.log("   UI:  A http://localhost:4700   B http://localhost:4701   C http://localhost:4702\n");
+}
 
 async function shutdown() {
   if (cerrando) return;

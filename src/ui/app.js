@@ -158,6 +158,16 @@ function tablaProductos(registros) {
 
 // --- vistas ---------------------------------------------------------------
 
+// En qué negocio estás (A, B o C). Sale de nodeName, que el nodo publica con
+// su estado; también va al título de la pestaña para distinguir ventanas.
+function renderQuien(state) {
+  const quien = $("who");
+  const nombre = state.nodeName;
+  quien.hidden = !nombre;
+  quien.textContent = nombre ? `Negocio ${nombre}` : "";
+  document.title = nombre ? `Paridad · Negocio ${nombre}` : "Paridad";
+}
+
 function renderGrupo(state) {
   const { status, identifiedPeers, expectedPeerCount } = state.network;
   const total = expectedPeerCount + 1;
@@ -175,6 +185,26 @@ function renderGrupo(state) {
     delete el.dataset.tone;
     $("group-text").textContent = `Grupo · ${conectados} de ${total} participantes`;
   }
+
+  // Un punto por participante, reutilizando los elementos: así el cambio de
+  // color es una transición y solo el peer recién identificado hace su
+  // entrada breve (una vez). Todo sale de identifiedPeers: nada se inventa.
+  const participantes = state.settings?.participants ?? [];
+  const activos = new Set([state.nodeName, ...identifiedPeers]);
+  const peers = $("peers");
+  while (peers.children.length > participantes.length) peers.lastElementChild.remove();
+  participantes.forEach((nombre, i) => {
+    let dot = peers.children[i];
+    if (!dot) {
+      dot = document.createElement("i");
+      dot.addEventListener("animationend", () => dot.classList.remove("just"));
+      peers.append(dot);
+    }
+    const encendido = activos.has(nombre);
+    if (encendido && dot.dataset.on !== "true") dot.classList.add("just");
+    dot.dataset.on = String(encendido);
+    dot.title = nombre;
+  });
 }
 
 function renderCta(state) {
@@ -313,6 +343,7 @@ function render(state) {
   }
   $("nav-history").setAttribute("aria-current", vista === "history" ? "page" : "false");
 
+  renderQuien(state);
   renderGrupo(state);
   renderCta(state);
   if (vista === "processing") renderProcessing(state);
@@ -351,10 +382,19 @@ $("results-history").addEventListener("click", () => {
   if (ultimoEstado) render(ultimoEstado);
 });
 
-$("factura-input").addEventListener("change", async (event) => {
-  const file = event.target.files?.[0];
-  event.target.value = "";
+function mostrarError(texto) {
+  const line = $("error-line");
+  line.hidden = false;
+  line.textContent = texto;
+}
+
+// Misma entrada para el selector de archivo y para arrastrar y soltar.
+async function subirFactura(file) {
   if (!file) return;
+  if (!/^image\/(png|jpeg)$/.test(file.type) && !/\.(png|jpe?g)$/i.test(file.name)) {
+    mostrarError("Solo se aceptan imágenes PNG o JPG.");
+    return;
+  }
   vistaElegida = null;
   try {
     // La imagen va al proceso LOCAL (localhost). No sale del dispositivo.
@@ -365,16 +405,60 @@ $("factura-input").addEventListener("change", async (event) => {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      const line = $("error-line");
-      line.hidden = false;
-      line.textContent = err.error ?? `No se pudo enviar la factura (error ${res.status})`;
+      mostrarError(err.error ?? `No se pudo enviar la factura (error ${res.status})`);
     }
   } catch (err) {
-    const line = $("error-line");
-    line.hidden = false;
-    line.textContent = err.message;
+    mostrarError(err.message);
   }
+}
+
+$("factura-input").addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  void subirFactura(file);
 });
+
+// Arrastrar y soltar sobre la zona de carga (la vista de inicio). Solo se
+// tiñe mientras hay un archivo encima; el contador evita el parpadeo que
+// produce dragleave al pasar entre elementos hijos.
+{
+  const zona = $("view-idle");
+  const nota = $("drop-note");
+  const textoNota = nota.textContent;
+  let dentro = 0;
+  const salir = () => {
+    dentro = 0;
+    zona.classList.remove("is-dragging");
+    nota.textContent = textoNota;
+  };
+  const traeArchivos = (e) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+  zona.addEventListener("dragenter", (e) => {
+    if (!traeArchivos(e)) return;
+    e.preventDefault();
+    if (dentro++ === 0) {
+      zona.classList.add("is-dragging");
+      nota.textContent = "Suelta la imagen para cargarla";
+    }
+  });
+  zona.addEventListener("dragover", (e) => {
+    if (!traeArchivos(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  });
+  zona.addEventListener("dragleave", () => {
+    if (--dentro <= 0) salir();
+  });
+  zona.addEventListener("drop", (e) => {
+    e.preventDefault();
+    salir();
+    if ($("cta-main").disabled) return; // la IA local está ocupada
+    void subirFactura(e.dataTransfer?.files?.[0]);
+  });
+  // Fuera de la zona no pasa nada: sin esto el navegador abriría la imagen
+  // en la pestaña y se perdería la pantalla.
+  document.addEventListener("dragover", (e) => e.preventDefault());
+  document.addEventListener("drop", (e) => e.preventDefault());
+}
 
 const dataSource = await pickDataSource();
 dataSource.subscribe(render);

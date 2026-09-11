@@ -17,12 +17,17 @@ do {
 } while ($nombre -notin @("A", "B", "C"))
 
 Write-Host ""
+# Para GRABAR la demo: el nodo arranca en la pantalla inicial, sin factura, y
+# la cargas desde la UI (boton "Cargar factura" o arrastrando la imagen).
+# Escribe "ui" en vez de una ruta. El historial de grabacion va aparte
+# (data\grabacion-<nodo>) y se vacia al arrancar para empezar de cero.
 $facturaDefault = "demo-data\facturas\factura-demo-$($nombre.ToLower()).png"
-$factura = Read-Host "Ruta a la imagen de la factura (Enter para usar la de demo: $facturaDefault)"
+$factura = Read-Host "Ruta a la imagen de la factura (Enter = la de demo: $facturaDefault; 'ui' = cargarla desde la interfaz)"
 if ([string]::IsNullOrWhiteSpace($factura)) { $factura = $facturaDefault }
 $factura = $factura.Trim('"')
+$desdeUI = $factura.Trim().ToLower() -eq "ui"
 
-if (-not (Test-Path $factura)) {
+if (-not $desdeUI -and -not (Test-Path $factura)) {
     Write-Host "No se encontro el archivo: $factura" -ForegroundColor Red
     Read-Host "Presiona Enter para salir"
     exit 1
@@ -50,7 +55,7 @@ if ([string]::IsNullOrWhiteSpace($topic)) { $topic = "paridad-hackathon-demo" }
 
 Write-Host ""
 Write-Host "Arrancando nodo $nombre..." -ForegroundColor Green
-Write-Host "  Factura:   $factura"
+if ($desdeUI) { Write-Host "  Factura:   (se carga desde la UI)" } else { Write-Host "  Factura:   $factura" }
 Write-Host "  Bootstrap: $bootstrapHost`:$bootstrapPort"
 Write-Host "  Topic:     $topic"
 Write-Host ""
@@ -63,6 +68,12 @@ Start-Job -ScriptBlock {
     Start-Process "http://localhost:4700"
 } | Out-Null
 
-node nodo-paridad.mjs $nombre --port 4700 --topic $topic --bootstrap-host $bootstrapHost --bootstrap-port $bootstrapPort --factura $factura --ocr-backend cpu
+if ($desdeUI) {
+    $datos = "data\grabacion-$nombre"
+    if (Test-Path $datos) { Remove-Item -Recurse -Force $datos }
+    node nodo-paridad.mjs $nombre --port 4700 --topic $topic --bootstrap-host $bootstrapHost --bootstrap-port $bootstrapPort --datos $datos --ocr-backend cpu
+} else {
+    node nodo-paridad.mjs $nombre --port 4700 --topic $topic --bootstrap-host $bootstrapHost --bootstrap-port $bootstrapPort --factura $factura --ocr-backend cpu
+}
 
 Read-Host "El nodo se detuvo. Presiona Enter para cerrar"

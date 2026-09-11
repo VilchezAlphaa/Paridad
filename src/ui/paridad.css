@@ -79,6 +79,21 @@ button { font: inherit; color: inherit; }
 
 .brand img { display: block; }
 
+.brand-row { display: inline-flex; align-items: center; gap: 12px; }
+
+/* "Negocio A": identidad del nodo, discreta pero legible en video */
+.who {
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 11px;
+  white-space: nowrap;
+}
+
 .nav { display: flex; align-items: center; gap: 18px; }
 
 .nav-btn {
@@ -193,6 +208,18 @@ button { font: inherit; color: inherit; }
 
 .hero-note { margin: 0; font-size: 14px; color: var(--ink-2); }
 .hero-note.muted { color: var(--ink-3); font-size: 13px; margin-top: 4px; }
+
+/* Arrastrar y soltar sobre la misma zona de carga: el borde es siempre
+   transparente y solo se tiñe mientras hay una imagen encima, asi la
+   pantalla no cambia de tamaño ni de composicion. */
+.view-idle {
+  border: 1px dashed transparent;
+  border-radius: 14px;
+  transition: border-color var(--t-comp), background-color var(--t-comp);
+}
+.view-idle.is-dragging { border-color: var(--accent); background: var(--surface); }
+.drop-note { margin: -10px 0 22px; font-size: 13px; color: var(--ink-3); }
+.view-idle.is-dragging .drop-note { color: var(--ink); }
 
 /* --- procesando ---------------------------------------------------------- */
 
@@ -361,6 +388,26 @@ button:focus-visible, summary:focus-visible, .brand:focus-visible {
 .stepper [data-state="active"] span, .stepper [data-state="done"] span,
 .checklist [data-state="done"]::before { animation: indicator-in var(--t-comp) var(--ease); }
 .group-arrived { animation: group-complete 400ms var(--ease); }
+
+/* Participantes: un punto por peer. Se llena al identificarse (transición
+   de color) y el recién llegado hace una única entrada breve. Cuando el
+   grupo queda completo, todos pasan al tono "ok" a la vez: ese es el
+   momento "el sistema está completo", sin efectos añadidos. */
+.peers { display: inline-flex; gap: 5px; margin-left: 10px; vertical-align: middle; }
+.peers i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--line);
+  transition: background-color var(--t-comp) var(--ease);
+}
+.peers i[data-on="true"] { background: var(--accent); }
+.group[data-tone="ok"] .peers i[data-on="true"] { background: var(--ok); }
+.peers i.just { animation: indicator-in var(--t-comp) var(--ease); }
+
+/* Checklist de procesamiento: cada paso entra 70 ms después del anterior
+   (retardo inline en el HTML). Se reinicia cada vez que la vista aparece. */
+.view-processing .checklist li {
+  animation: enter var(--t-comp) var(--ease) var(--entry-delay, 0ms) backwards;
+}
 .products tbody tr, .invoice {
   animation: enter var(--t-comp) var(--ease) var(--entry-delay, 0ms) backwards;
 }
@@ -382,6 +429,7 @@ button:focus-visible, summary:focus-visible, .brand:focus-visible {
 }
 @media (max-width: 400px) {
   .top { flex-wrap: wrap; }
+  .brand-row { flex-wrap: wrap; gap: 8px; }
   .nav { flex-wrap: wrap; }
   .stepper { gap: 10px; }
   .stepper li { gap: 4px; }

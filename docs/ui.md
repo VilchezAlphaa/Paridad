@@ -61,10 +61,16 @@ Nunca se inventa una referencia y nunca aparece un precio de otro negocio.
 ## Navegación
 
 Solo dos entradas: **+ Agregar factura** y **Facturas agregadas**. Un único
-CTA: si el nodo arrancó con facturas pendientes (`npm run demo:manual`) el
-mismo botón dice «Procesar factura» y las procesa; si no, abre el selector de
-archivo. La imagen va al proceso local por `localhost` y no sale del
-dispositivo.
+CTA: si el nodo arrancó con facturas pendientes (`--manual`) el mismo botón
+dice «Procesar factura» y las procesas; si no, abre el diálogo de archivos del
+sistema. La misma zona de inicio acepta **arrastrar y soltar** la imagen (PNG o
+JPG): mientras hay un archivo encima, el borde se tiñe y la nota bajo el botón
+cambia a «Suelta la imagen para cargarla». Fuera de esa zona soltar no hace
+nada (la página no navega a la imagen). La imagen va al proceso local por
+`localhost` y no sale del dispositivo.
+
+Junto al logo, una etiqueta «Negocio A/B/C» (y el título de la pestaña) dice en
+qué nodo estás: sale de `nodeName`, que el nodo publica con su estado.
 
 El estado del grupo es una línea discreta bajo la cabecera:
 «● Grupo conectado · 3 participantes» o «● Grupo · 2 de 3 participantes».
@@ -108,7 +114,7 @@ No hay animaciones infinitas ni contadores simulados.
 Para verificar: `npm test`, después `npm run demo`; abrir
 `http://localhost:4700`. Revisar procesamiento, cinco productos de la factura
 multi, comparación del aceite y navegación a Facturas agregadas y vuelta.
-Para observar el inicio antes de procesar usar `npm run demo:manual` y
-procesar A, B y C de uno en uno. Un historial previo puede abrir resultados;
-no se borra para simular un inicio vacío. Comprobar también teclado,
-movimiento reducido y pantalla estrecha.
+Para observar el inicio vacío usar `npm run demo:manual` (los nodos arrancan
+sin facturas y con historial limpio) y cargar A, B y C de uno en uno, por
+diálogo o arrastrando. Comprobar también teclado, movimiento reducido y
+pantalla estrecha.

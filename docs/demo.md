@@ -39,16 +39,37 @@ Luego abre las tres interfaces:
 
 `Ctrl+C` en la terminal cierra los tres nodos y el DHT local.
 
-### Variante conducida a mano
+### Modo manual (para grabar la demo)
 
 ```powershell
 npm run demo:manual
 ```
 
-Los nodos arrancan pero **no procesan nada** hasta que pulsas
-«Procesar facturas» en su UI. Sirve para grabar el vídeo mostrando el
-disparo. **Pulsa de uno en uno y espera a que el anterior termine**: tres OCR
-simultáneos tumban el worker de QVAC en esta máquina.
+Los tres nodos arrancan **sin ninguna factura** y esperan en la pantalla
+inicial (cada UI muestra en qué negocio estás: «Negocio A/B/C»). La factura la
+cargas tú en cada UI como lo haría un usuario: con **Cargar factura** (diálogo
+de archivos del sistema) o **arrastrando la imagen** sobre la zona de carga.
+A partir de ahí el flujo es el real: QVAC extrae, el historial local registra
+los productos, y cuando los tres nodos tienen el aceite se calcula la
+referencia del grupo. El historial de este modo va en `data/demo-manual/` y
+**se vacía en cada arranque**, así cada grabación empieza de cero.
+
+Guion previsto (facturas en `demo-data/facturas/`):
+
+| Nodo | UI | Factura a cargar | Qué se ve |
+|---|---|---|---|
+| A | http://localhost:4700 | `factura-demo-multi.png` | 5 productos; todos «Sin comparación disponible» |
+| B | http://localhost:4701 | `factura-demo-b.png` | 1 producto; sin comparación |
+| C | http://localhost:4702 | `factura-demo-c.png` | 1 producto; al terminar, los tres nodos muestran la referencia del aceite |
+
+**En una sola máquina, carga de uno en uno y espera a que el anterior
+termine**: tres OCR simultáneos tumban el worker de QVAC en esta máquina (cada
+nodo libera la GPU al acabar). En tres laptops no aplica. Los nodos A, B y C
+son ventanas distintas del mismo navegador: fíjate en la etiqueta «Negocio X»
+de cada una antes de soltar la factura.
+
+En tres laptops, el mismo modo se consigue con `Iniciar_Nodo_Paridad.ps1`
+escribiendo `ui` cuando pide la ruta de la factura.
 
 ### Demo de red (sin OCR)
 
