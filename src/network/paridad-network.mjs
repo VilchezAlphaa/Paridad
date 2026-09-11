@@ -228,16 +228,47 @@ export class ParidadNetwork extends EventEmitter {
 
     conn.on("error", (err) => {
       this.emit("error", new Error(`Conexion con ${entry.name ?? "peer sin identificar"}: ${err.message}`));
-      // La limpieza de estado la hace "close", que Hyperswarm emite igual tras un error.
+      // La limpieza de estado normalmente la hace "close", que Hyperswarm
+      // emite igual tras un error. Pero con red real inestable (Wi-Fi, no
+      // localhost) se observaron conexiones que erroran y luego NUNCA
+      // cierran: el timer de abajo es el respaldo para que esa entrada no
+      // se quede viva para siempre en connectionsByKey.
     });
 
     conn.on("close", () => this._handleClose(remoteKey, entry));
+
+    // Respaldo: si tras este plazo la conexion no se identifico Y sigue
+    // "viva" segun nuestro propio mapa, se fuerza su cierre y limpieza.
+    // Sin esto, una conexion que erroro sin disparar "close" (visto en
+    // pruebas reales entre laptops, no en localhost) queda acumulada para
+    // siempre: cada reintento de descubrimiento suma una entrada mas y la
+    // memoria del proceso crece sin limite durante una reconexion larga.
+    const idTimeout = setTimeout(() => {
+      if (this.connectionsByKey.get(remoteKey) !== entry || entry.name) return;
+      entry.conn.destroy();
+      this._handleClose(remoteKey, entry);
+    }, 20000);
+    idTimeout.unref?.();
+    conn.on("close", () => clearTimeout(idTimeout));
   }
 
   _handleData(remoteKey, entry, data) {
     // Framing NDJSON: el stream puede entregar varios mensajes juntos
     // o uno partido en varios eventos "data".
     entry.buffer += data.toString();
+
+    // Nuestros propios mensajes son minusculos (nombres de producto,
+    // shares como string, column-sums). Un buffer que crece sin nunca
+    // encontrar un "\n" es una senal de stream corrupto -- se cierra la
+    // conexion en vez de dejar que el buffer crezca sin techo en
+    // silencio (visto en pruebas reales: memoria creciendo sin ningun
+    // error ni cambio de estado).
+    if (entry.buffer.length > 65536) {
+      this.emit("error", new Error(`Buffer de ${entry.name ?? "peer sin identificar"} excedio el limite sin hallar un mensaje completo, cerrando conexion`));
+      entry.conn.destroy();
+      return;
+    }
+
     let newlineIndex;
     while ((newlineIndex = entry.buffer.indexOf("\n")) !== -1) {
       const line = entry.buffer.slice(0, newlineIndex);
