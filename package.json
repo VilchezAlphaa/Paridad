@@ -5,14 +5,15 @@
   "main": "index.js",
   "scripts": {
     "test": "npm run test:privacy && npm run test:network && npm run test:e2e",
-    "test:privacy": "node src/privacy/test-secret-sharing.mjs && node src/privacy/test-aggregation-protocol.mjs",
+    "test:privacy": "node src/privacy/test-secret-sharing.mjs && node src/privacy/test-aggregation-protocol.mjs && node src/extraction/test-historial.mjs",
     "test:network": "node src/network/test-paridad-network.mjs",
     "test:e2e": "node src/network/test-aggregation-e2e.mjs",
     "demo": "node demo-local.mjs",
     "ui": "npx -y serve -l 4173 .",
     "demo:manual": "node demo-local.mjs --manual",
     "demo:items": "node demo-items.mjs",
-    "test:demo": "node src/network/test-demo-facturas.mjs"
+    "test:demo": "node src/network/test-demo-facturas.mjs",
+    "test:multi": "node src/extraction/test-multi-producto.mjs"
   },
   "keywords": [],
   "author": "",

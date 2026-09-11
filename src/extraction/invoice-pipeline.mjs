@@ -92,6 +92,39 @@ export const LLM_EXTRACTION_SCHEMA = {
   additionalProperties: false,
 };
 
+/**
+ * Schema para facturas con VARIAS líneas de producto. Es el mismo objeto de
+ * línea que LLM_EXTRACTION_SCHEMA, envuelto en un array con `minItems: 1`.
+ *
+ * Medido sobre las facturas de demo: las de una línea siguen dando exactamente
+ * un ítem con los mismos valores que la ruta de un producto (4700/3100/5200), y
+ * la de cinco líneas da los cinco con cantidades y precios exactos. Por eso
+ * esta ruta se puede usar como superconjunto de la otra.
+ */
+export const LLM_ITEMS_SCHEMA = {
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      minItems: 1,
+      items: LLM_EXTRACTION_SCHEMA,
+    },
+  },
+  required: ["items"],
+  additionalProperties: false,
+};
+
+const SYSTEM_PROMPT_ITEMS = [
+  "Eres un extractor de datos de facturas de compra.",
+  "Recibes el texto OCR de UNA factura y devuelves TODAS las líneas de producto que se compraron, una por línea de la factura.",
+  "product: solo la descripción del producto, SIN la cantidad y SIN la unidad (UND, PZA).",
+  "quantity: la cantidad comprada de esa línea, como entero.",
+  "unit_price: el precio unitario de esa línea (el número que sigue a P.UNIT o PRECIO UNITARIO), copiado literalmente con dos decimales.",
+  "No uses el total a pagar como precio unitario.",
+  "No inventes líneas que no estén en el texto.",
+  "/no_think",
+].join(" ");
+
 const SYSTEM_PROMPT = [
   "Eres un extractor de datos de facturas de compra.",
   "Recibes el texto OCR de UNA factura y devuelves la línea de producto que se compró.",
@@ -381,6 +414,62 @@ export async function extractInvoice({ sesion, imagePath }) {
     unit_price_cents: priceStringToCents(crudo.unit_price),
     // --- derivado local ---
     product_canonical: normalizeProduct(repairOcrText(crudo.product)),
+    // --- solo local: nunca se envía por la red ---
+    _local: { texto, lineas, msOcr, msLlm, ocrBackend: sesion.ocrBackend },
+  };
+}
+
+/** Paso 2 (variante multi-línea): texto → { items: [...] }, garantizado por gramática. */
+export async function extractStructuredItems({ llmModelId, texto }) {
+  const run = completion({
+    modelId: llmModelId,
+    history: [
+      { role: "system", content: SYSTEM_PROMPT_ITEMS },
+      { role: "user", content: `Texto OCR de la factura:\n\n${texto}` },
+    ],
+    stream: false,
+    generationParams: GENERATION_PARAMS,
+    responseFormat: {
+      type: "json_schema",
+      json_schema: { name: "invoice_items", schema: LLM_ITEMS_SCHEMA },
+    },
+  });
+
+  const final = await run.final;
+  const bruto = final.contentText.trim();
+
+  try {
+    return JSON.parse(bruto);
+  } catch (err) {
+    throw new Error(`QVAC devolvió un JSON no parseable: ${err.message}\nSalida: ${bruto}`);
+  }
+}
+
+/**
+ * Pipeline completo para una factura con UNA O VARIAS líneas de producto.
+ *
+ * Devuelve `items`: un registro por línea, cada uno con el schema público
+ * { product, quantity, unit_price_cents, product_canonical }. Es la ruta que
+ * usa el nodo; extractInvoice() (un producto) se conserva tal cual.
+ */
+export async function extractInvoiceItems({ sesion, imagePath }) {
+  const t0 = Date.now();
+  const { texto, lineas } = await ocrInvoiceConRespaldo(sesion, imagePath);
+  const msOcr = Date.now() - t0;
+
+  const t1 = Date.now();
+  const crudo = await extractStructuredItems({ llmModelId: sesion.llmModelId, texto });
+  const msLlm = Date.now() - t1;
+
+  const items = crudo.items.map((linea) => ({
+    product: linea.product,
+    quantity: linea.quantity,
+    unit_price_cents: priceStringToCents(linea.unit_price),
+    product_canonical: normalizeProduct(repairOcrText(linea.product)),
+  }));
+
+  return {
+    items,
     // --- solo local: nunca se envía por la red ---
     _local: { texto, lineas, msOcr, msLlm, ocrBackend: sesion.ocrBackend },
   };

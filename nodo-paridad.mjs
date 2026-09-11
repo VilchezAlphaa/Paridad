@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import { ParidadNetwork } from "./src/network/paridad-network.mjs";
 import { AggregationRunner } from "./src/network/aggregation-runner.mjs";
 import { PARTICIPANTS } from "./src/privacy/aggregation-protocol.mjs";
+import { abrirHistorial, idDeFactura, COMPARACION, MIN_PARTICIPANTES_COMPARACION } from "./src/extraction/historial.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -86,14 +87,13 @@ const cliItems = itemSpecs.length
     ? [{ product, priceCents: BigInt(priceCents), quantity, proveedor: argValue("--proveedor") ?? null }]
     : [];
 
+// Arrancar sin fuente de datos es valido: la UI permite anadir facturas
+// (Agregar factura) y el historial local puede tener compras anteriores.
 if (!cliItems.length && !facturas.length && !carpeta) {
-  console.error(
-    "Falta al menos una fuente de datos:\n" +
-      "  --factura <imagen>  (extraccion QVAC local)\n" +
-      "  --carpeta <dir>     (vigilar carpeta de facturas)\n" +
-      '  --item "Nombre:centavos:cantidad[:Proveedor]"  |  --price <centavos>'
+  console.log(
+    "   Sin facturas ni items por CLI: anade facturas desde la UI (Agregar factura),\n" +
+      "   o arranca con --factura <imagen> | --carpeta <dir> | --item \"Nombre:centavos:cantidad\""
   );
-  process.exit(1);
 }
 
 // --- red + ronda ------------------------------------------------------------
@@ -131,189 +131,297 @@ runner.on("result", (result) => {
 
 net.start();
 
-// Items vivos del nodo (CLI + los que produzca la extraccion de
-// facturas). La clave de ronda es el nombre canonico del producto.
-const liveItems = [...cliItems];
-if (liveItems.length) runner.setItems(liveItems);
-
-// --- extraccion local de facturas (pipeline QVAC de Pablo) ------------------
+// --- historial local + items de ronda ----------------------------------------
 //
-// Se importa en diferido: un nodo sin --factura/--carpeta no carga el
-// SDK de QVAC. El pipeline corre EN este proceso (no usa el servidor
-// http de QVAC) y tiene respaldo automatico a CPU si la GPU falla.
+//   factura → extracción local → HISTORIAL LOCAL → comparación cuando haya datos
+//
+// El historial guarda TODOS los productos de cada factura (uno por línea) en
+// un JSON del dispositivo. A la ronda P2P solo llega, por producto canónico,
+// el último precio conocido: la ronda ya existía y no cambia; lo nuevo es
+// que ningún producto sobreescribe a otro y que todo sobrevive al reinicio.
+const datosDir = path.resolve(argValue("--datos") ?? path.join(__dirname, "data", `nodo-${selfName}`));
+const facturasSubidasDir = path.join(datosDir, "facturas");
+const historial = abrirHistorial({ ruta: path.join(datosDir, "historial.json"), nodo: selfName });
 
-// Ciclo de vida de `extraction.status` (lo pinta la UI tal cual):
-//   IDLE        hay facturas configuradas, esperando el disparo
-//   LOADING_AI  cargando los modelos QVAC en este dispositivo
-//   PROCESSING  extrayendo producto y precio de una factura
-//   READY       modelos cargados y en reposo (solo con --carpeta)
-//   DONE        cola inicial procesada y modelos liberados
-//   ERROR       el pipeline no arranco o fallo
-const hayFuenteDeFacturas = facturas.length > 0 || carpeta !== null;
+/**
+ * Items que entran en la ronda.
+ *
+ * Dos modos que NO se mezclan:
+ *   - con --item (demo:items, tests de red): exactamente lo que dio la CLI;
+ *   - sin --item (modo producto): el último precio por producto canónico
+ *     del historial local.
+ * Si se mezclaran, un historial que quedara en data/ de una sesión anterior
+ * se colaría en los tests de red y cambiaría lo que esperan.
+ */
+function itemsParaRonda() {
+  if (cliItems.length) return [...cliItems];
 
-let extraction = hayFuenteDeFacturas
-  ? {
-      status: "IDLE",
-      currentFile: null,
-      steps: null,
-      processed: 0,
-      total: facturas.length,
-      folder: carpeta,
-      error: null,
-    }
-  : null; // null = este nodo no extrae facturas
-let extractionQueue = Promise.resolve();
-let extractionStarted = false;
-const processedFiles = new Set();
-
-function upsertItem(nuevo) {
-  const index = liveItems.findIndex((item) => item.product === nuevo.product);
-  if (index === -1) liveItems.push(nuevo);
-  else liveItems[index] = nuevo;
-  runner.setItems(liveItems);
+  return historial.ultimoPorProducto().map((r) => ({
+    product: r.productCanonical,
+    display: r.product,
+    priceCents: BigInt(r.unitPriceCents),
+    quantity: r.quantity,
+    proveedor: null,
+  }));
 }
 
-async function startExtraction() {
-  if (!hayFuenteDeFacturas || extractionStarted) return;
-  extractionStarted = true;
+function sincronizarRonda() {
+  const items = itemsParaRonda();
+  if (items.length) runner.setItems(items);
+}
 
-  extraction.status = "LOADING_AI";
-  localAiStatus = "LOADING";
+// Lo que ya había en el historial entra en ronda desde el arranque.
+sincronizarRonda();
+
+/**
+ * CAPA DE COMPARACIÓN (preparada para la fase 2).
+ *
+ * Único punto donde el historial se cruza con el resultado de agregación.
+ * Hoy lee el resultado de la ronda por producto que ya calcula el runner;
+ * cuando exista la comparación por producto con umbral, se conecta aquí y
+ * ni el historial ni la UI tienen que cambiar.
+ *
+ * Regla de privacidad: sin al menos MIN_PARTICIPANTES_COMPARACION
+ * participantes válidos para ese producto no se expone ninguna referencia.
+ */
+function estadoComparacion(productCanonical, itemsDeRonda) {
+  const item = itemsDeRonda.get(productCanonical);
+  if (item?.result && item.result.participants >= MIN_PARTICIPANTES_COMPARACION) {
+    return {
+      estado: COMPARACION.DISPONIBLE,
+      referencia: item.result.averageCents / 100,
+      posicionPct: item.result.positionPercent,
+      participantes: item.result.participants,
+    };
+  }
+  if (item?.status === "NOT_COMMON") {
+    return { estado: COMPARACION.NO_DISPONIBLE, motivo: "no hay suficientes negocios con este producto" };
+  }
+  return { estado: COMPARACION.PENDIENTE };
+}
+
+function mapaItemsDeRonda() {
+  return new Map(runner.getState().items.map((item) => [item.product, item]));
+}
+
+runner.on("result", (result) => {
+  historial.marcarComparacion(result.product, estadoComparacion(result.product, mapaItemsDeRonda()));
+});
+
+// --- extracción local de facturas (pipeline QVAC) ---------------------------
+//
+// Se importa en diferido: un nodo que nunca procesa facturas no carga el SDK
+// de QVAC. El pipeline corre EN este proceso (no usa el servidor http de
+// QVAC) y tiene respaldo automático a CPU si la GPU falla.
+//
+// Es un worker de cola SECUENCIAL: carga los modelos, procesa lo que haya en
+// cola, y si no hay carpeta que vigilar los libera al terminar. Así:
+//   - nunca hay dos OCR a la vez en este proceso;
+//   - la GPU queda libre entre lotes (tres contextos OCR en Vulkan a la vez
+//     tumban el worker de QVAC en esta máquina);
+//   - una factura añadida desde la UI más tarde vuelve a cargar los modelos
+//     sola.
+//
+// Ciclo de vida de `extraction.status` (lo pinta la UI tal cual):
+//   IDLE        nada en marcha; puede haber facturas pendientes (--manual)
+//   LOADING_AI  cargando los modelos QVAC en este dispositivo
+//   PROCESSING  extrayendo producto(s) y precio(s) de una factura
+//   READY       modelos cargados y en reposo (solo con --carpeta)
+//   DONE        lote procesado y modelos liberados
+//   ERROR       el pipeline no arrancó o falló
+const extraction = {
+  status: "IDLE",
+  currentFile: null,
+  steps: null,
+  processed: 0,
+  pendientes: 0,
+  folder: carpeta,
+  error: null,
+  ultimaFactura: null, // { id, archivo, lineas, procesadaEn }
+};
+
+const cola = [];
+const processedFiles = new Set();
+let trabajando = false;
+let sesionPersistente = null; // solo con --carpeta: los modelos se quedan cargados
+
+function encolarFactura(ruta, { inmediato }) {
+  const clave = path.normalize(ruta).toLowerCase();
+  if (processedFiles.has(clave)) return false;
+  processedFiles.add(clave);
+  cola.push(ruta);
+  extraction.pendientes = cola.length;
   broadcastUiState();
+  if (inmediato) void trabajar();
+  return true;
+}
 
-  const pipeline = await import("./src/extraction/invoice-pipeline.mjs");
-  const sesion = await pipeline.loadPipeline(ocrBackend ? { backendDevice: ocrBackend } : {});
-  console.log(`   [ia] pipeline QVAC cargado (OCR en ${sesion.ocrBackend})`);
-  localAiStatus = "ACTIVE";
-  extraction.status = "READY";
+async function procesarFactura(pipeline, sesion, ruta) {
+  const nombre = path.basename(ruta);
+  extraction.status = "PROCESSING";
+  extraction.currentFile = nombre;
+  extraction.steps = { cargada: true, ia: true, producto: false, precio: false };
+  extraction.error = null;
   broadcastUiState();
+  console.log(`   [ia] procesando ${nombre}...`);
 
-  async function procesarFactura(ruta) {
-    const nombre = path.basename(ruta);
-    extraction.status = "PROCESSING";
-    extraction.currentFile = nombre;
-    extraction.steps = { cargada: true, ia: true, producto: false, precio: false };
-    extraction.error = null;
-    broadcastUiState();
-    console.log(`   [ia] procesando ${nombre}...`);
+  try {
+    const resultado = await pipeline.extractInvoiceItems({ sesion, imagePath: ruta });
+    for (const item of resultado.items) {
+      const errores = pipeline.validateExtraction(item);
+      if (errores.length) throw new Error(`línea "${item.product}": ${errores.join("; ")}`);
+    }
 
-    try {
-      const resultado = await pipeline.extractInvoice({ sesion, imagePath: ruta });
-      const errores = pipeline.validateExtraction(resultado);
-      if (errores.length) throw new Error(errores.join("; "));
+    extraction.steps.producto = true;
+    extraction.steps.precio = true;
 
-      extraction.steps.producto = true;
-      extraction.steps.precio = true;
-      extraction.processed++;
+    // La factura, el texto OCR y todo lo de _local se quedan aquí. Al
+    // historial van las líneas; a la ronda, el último precio por producto.
+    const facturaId = idDeFactura(ruta);
+    const { msOcr, msLlm, ocrBackend } = resultado._local;
+    const registros = historial.registrar(
+      { id: facturaId, archivo: nombre, ocrBackend, msOcr, msLlm },
+      resultado.items
+    );
+    sincronizarRonda();
 
-      // La factura, el texto OCR y todo lo de _local se quedan aqui.
-      upsertItem({
-        product: resultado.product_canonical,
-        display: resultado.product,
-        priceCents: BigInt(resultado.unit_price_cents),
-        quantity: resultado.quantity,
-        proveedor: null,
-      });
-      console.log(
-        `   [ia] ${nombre}: "${resultado.product_canonical}" x${resultado.quantity} — precio extraido localmente (no se muestra en logs de red)`
-      );
+    extraction.processed++;
+    extraction.ultimaFactura = {
+      id: facturaId,
+      archivo: nombre,
+      lineas: registros.length,
+      procesadaEn: registros[0].procesadaEn,
+    };
 
-      // Evidencia auditable de que la factura paso por QVAC en ESTE
-      // dispositivo: backend real y tiempos de OCR/LLM. El precio NO se
-      // imprime a proposito -- en la demo local los tres stdout se mezclan
-      // en la misma terminal y ver los tres precios contradiria el relato.
-      // Cada nodo si expone el suyo en su propia UI (/api/state).
+    console.log(
+      `   [ia] ${nombre}: ${registros.length} producto(s) registrados localmente — precios extraídos en este dispositivo (no se muestran en logs de red)`
+    );
+
+    // Evidencia auditable de que la factura pasó por QVAC en ESTE
+    // dispositivo: backend real y tiempos de OCR/LLM. Los precios NO se
+    // imprimen a propósito: en la demo local los tres stdout se mezclan en
+    // la misma terminal y ver los precios de todos contradiría el relato.
+    // Cada nodo sí expone los suyos en su propia UI (/api/state).
+    resultado.items.forEach((item, i) => {
       console.log(
         `PARIDAD_EXTRACCION ${JSON.stringify({
           nodo: selfName,
           archivo: nombre,
-          product: resultado.product,
-          product_canonical: resultado.product_canonical,
-          quantity: resultado.quantity,
-          ocrBackend: resultado._local.ocrBackend,
-          msOcr: resultado._local.msOcr,
-          msLlm: resultado._local.msLlm,
+          facturaId,
+          linea: i + 1,
+          lineas: resultado.items.length,
+          product: item.product,
+          product_canonical: item.product_canonical,
+          quantity: item.quantity,
+          ocrBackend,
+          msOcr,
+          msLlm,
         })}`
       );
-    } catch (err) {
-      extraction.error = `${nombre}: ${err.message}`;
-      console.warn(`   ⚠️  [ia] fallo extrayendo ${nombre}: ${err.message}`);
-    } finally {
-      extraction.status = "READY";
-      extraction.currentFile = null;
-      broadcastUiState();
-    }
-  }
-
-  function encolarFactura(ruta) {
-    const clave = path.normalize(ruta).toLowerCase();
-    if (processedFiles.has(clave)) return;
-    processedFiles.add(clave);
-    extractionQueue = extractionQueue.then(() => procesarFactura(ruta));
-  }
-
-  for (const ruta of facturas) encolarFactura(path.resolve(ruta));
-
-  if (carpeta) {
-    const dir = path.resolve(carpeta);
-    // Al arrancar se procesan las facturas que ya esten en la carpeta...
-    for (const nombre of fs.readdirSync(dir)) {
-      if (/\.(png|jpe?g)$/i.test(nombre)) encolarFactura(path.join(dir, nombre));
-    }
-    // ...y despues se vigila para detectar las nuevas. El debounce da
-    // tiempo a que el archivo termine de copiarse.
-    const pendientes = new Map();
-    fs.watch(dir, (_event, nombre) => {
-      if (!nombre || !/\.(png|jpe?g)$/i.test(nombre)) return;
-      clearTimeout(pendientes.get(nombre));
-      pendientes.set(
-        nombre,
-        setTimeout(() => {
-          pendientes.delete(nombre);
-          const ruta = path.join(dir, nombre);
-          if (fs.existsSync(ruta)) encolarFactura(ruta);
-        }, 1500)
-      );
     });
-    console.log(`   [ia] vigilando carpeta de facturas: ${dir}`);
-  } else {
-    // Sin carpeta que vigilar, la IA ya no hace falta cuando termina la
-    // cola inicial. Liberar los modelos devuelve ~400 MB de RAM y, sobre
-    // todo, suelta la GPU: tres contextos OCR en Vulkan a la vez tumban
-    // el worker de QVAC en esta maquina (ver docs/pipeline-extraccion.md).
-    extractionQueue = extractionQueue.then(async () => {
-      const pipelineMod = await import("./src/extraction/invoice-pipeline.mjs");
-      await pipelineMod.unloadPipeline(sesion);
-      extraction.status = "DONE";
-      localAiStatus = "DONE";
+    console.log(
+      `PARIDAD_FACTURA_REGISTRADA ${JSON.stringify({ nodo: selfName, archivo: nombre, facturaId, lineas: registros.length })}`
+    );
+  } catch (err) {
+    extraction.error = `${nombre}: ${err.message}`;
+    console.warn(`   ⚠️  [ia] fallo extrayendo ${nombre}: ${err.message}`);
+  } finally {
+    extraction.currentFile = null;
+    extraction.pendientes = cola.length;
+    broadcastUiState();
+  }
+}
+
+async function trabajar() {
+  if (trabajando || cola.length === 0) return;
+  trabajando = true;
+
+  let pipeline = null;
+  let sesion = sesionPersistente;
+  try {
+    pipeline = await import("./src/extraction/invoice-pipeline.mjs");
+
+    if (!sesion) {
+      extraction.status = "LOADING_AI";
+      localAiStatus = "LOADING";
       broadcastUiState();
+      sesion = await pipeline.loadPipeline(ocrBackend ? { backendDevice: ocrBackend } : {});
+      console.log(`   [ia] pipeline QVAC cargado (OCR en ${sesion.ocrBackend})`);
+    }
+    localAiStatus = "ACTIVE";
+    extraction.status = "READY";
+    broadcastUiState();
+
+    while (cola.length) {
+      await procesarFactura(pipeline, sesion, cola.shift());
+    }
+  } catch (err) {
+    extraction.status = "ERROR";
+    extraction.error = err.message;
+    localAiStatus = "OFFLINE";
+    console.error(`   💥 [ia] no se pudo iniciar el pipeline de extracción: ${err.message}`);
+  } finally {
+    if (sesion && carpeta) {
+      // Vigilando una carpeta merece la pena dejar los modelos cargados.
+      sesionPersistente = sesion;
+      if (extraction.status !== "ERROR") extraction.status = "READY";
+    } else if (sesion) {
+      // Sin carpeta, la IA ya no hace falta: liberar devuelve ~400 MB y,
+      // sobre todo, suelta la GPU para el siguiente nodo o el siguiente lote.
+      await pipeline.unloadPipeline(sesion);
+      if (extraction.status !== "ERROR") extraction.status = "DONE";
+      localAiStatus = "DONE";
       console.log(
         `PARIDAD_EXTRACCION_LISTA ${JSON.stringify({ nodo: selfName, procesadas: extraction.processed })}`
       );
-    });
+    }
+    trabajando = false;
+    extraction.pendientes = cola.length;
+    broadcastUiState();
+    // Si entró algo mientras liberábamos, se atiende en un lote nuevo.
+    if (cola.length) void trabajar();
   }
 }
 
-/** Punto unico de arranque de la extraccion (auto o desde la UI). */
+/** Disparo explícito (botón de la UI o --manual): procesa lo que esté en cola. */
 function dispararExtraccion() {
-  return startExtraction().catch((err) => {
-    if (extraction) {
-      extraction.status = "ERROR";
-      extraction.error = err.message;
-    }
-    localAiStatus = "OFFLINE";
-    broadcastUiState();
-    console.error(`   💥 [ia] no se pudo iniciar el pipeline de extraccion: ${err.message}`);
-  });
+  return trabajar();
 }
 
-// Con --manual el nodo carga la red pero espera a que alguien pulse
-// "Procesar facturas" en su UI (POST /api/procesar). Sirve para conducir
-// la demo a mano; sin el flag arranca solo.
-if (hayFuenteDeFacturas && !manual) {
-  // setImmediate: el resto del modulo (estado de UI, servidor) debe
-  // terminar de evaluarse antes de que la extraccion toque ese estado.
-  setImmediate(() => void dispararExtraccion());
+// Facturas configuradas por CLI. Con --manual quedan en cola hasta que
+// alguien pulse el botón en la UI; sin el flag arrancan solas.
+// setImmediate: el resto del módulo (estado de UI, servidor) debe terminar
+// de evaluarse antes de que la extracción toque ese estado.
+setImmediate(() => {
+  for (const ruta of facturas) encolarFactura(path.resolve(ruta), { inmediato: false });
+  if (facturas.length && !manual) void trabajar();
+});
+
+if (carpeta) {
+  const dir = path.resolve(carpeta);
+  // Al arrancar se procesan las facturas que ya estén en la carpeta...
+  setImmediate(() => {
+    for (const nombre of fs.readdirSync(dir)) {
+      if (/\.(png|jpe?g)$/i.test(nombre)) encolarFactura(path.join(dir, nombre), { inmediato: false });
+    }
+    void trabajar();
+  });
+  // ...y después se vigila para detectar las nuevas. El debounce da
+  // tiempo a que el archivo termine de copiarse.
+  const pendientesWatch = new Map();
+  fs.watch(dir, (_event, nombre) => {
+    if (!nombre || !/\.(png|jpe?g)$/i.test(nombre)) return;
+    clearTimeout(pendientesWatch.get(nombre));
+    pendientesWatch.set(
+      nombre,
+      setTimeout(() => {
+        pendientesWatch.delete(nombre);
+        const ruta = path.join(dir, nombre);
+        if (fs.existsSync(ruta)) encolarFactura(ruta, { inmediato: true });
+      }, 1500)
+    );
+  });
+  console.log(`   [ia] vigilando carpeta de facturas: ${dir}`);
 }
 
 // --- chequeos de entorno (solo lectura, para las tiles de la UI) ------------
@@ -322,23 +430,14 @@ if (hayFuenteDeFacturas && !manual) {
 // Con facturas configuradas arranca en IDLE ("va a procesar"), no en
 // OFFLINE: decir OFFLINE mientras la IA local esta a punto de trabajar
 // -- o trabajando -- era justo lo contrario de lo que pasa.
-let localAiStatus = hayFuenteDeFacturas ? "IDLE" : "OFFLINE";
+let localAiStatus = "IDLE";
 let internetStatus = "OFFLINE";
 
 async function checkEnvironment() {
-  // Con el pipeline de extraccion activo, el estado de la IA local lo
-  // gobierna el propio pipeline (in-process); el chequeo del servidor
-  // http de QVAC solo aplica cuando no hay extraccion.
-  if (extraction === null) {
-    try {
-      const res = await fetch("http://127.0.0.1:11434/v1/models", {
-        signal: AbortSignal.timeout(1500),
-      });
-      localAiStatus = res.ok ? "ACTIVE" : "OFFLINE";
-    } catch {
-      localAiStatus = "OFFLINE";
-    }
-  }
+  // El estado de la IA local lo gobierna el propio pipeline (in-process).
+  // Antes, sin extracción configurada, se sondeaba el servidor http de QVAC
+  // y se pintaba ACTIVE si estaba corriendo: engañoso, porque Paridad no lo
+  // usa para nada. Ahora sin facturas procesadas la IA figura EN ESPERA.
 
   try {
     await Promise.race([
@@ -415,7 +514,28 @@ function buildUiState() {
       totalItems: uiItems.length,
       participants: net.participants.length,
     },
-    extraction: extraction ?? { status: "DISABLED" },
+    extraction: { ...extraction, pendientes: cola.length },
+    // Historial local: TODOS los productos de TODAS las facturas de este
+    // nodo, con su precio (es el dispositivo del propio usuario) y el
+    // estado de comparacion calculado en la capa de comparacion.
+    historial: (() => {
+      const itemsDeRonda = mapaItemsDeRonda();
+      return {
+        resumen: historial.resumen(),
+        facturas: historial.facturas(),
+        registros: historial.todos().map((r) => ({
+          id: r.id,
+          facturaId: r.facturaId,
+          archivo: r.archivo,
+          procesadaEn: r.procesadaEn,
+          product: r.product,
+          productCanonical: r.productCanonical,
+          quantity: r.quantity,
+          unitPrice: r.unitPriceCents / 100,
+          comparacion: estadoComparacion(r.productCanonical, itemsDeRonda),
+        })),
+      };
+    })(),
     settings: {
       port,
       group: topicSeed ?? "paridad-network-v1",
@@ -462,12 +582,51 @@ if (withUi) {
       return;
     }
 
+    // "Agregar factura": el navegador manda la imagen al proceso LOCAL (mismo
+    // dispositivo, localhost). Se guarda en el directorio de datos del nodo y
+    // entra en la cola de extraccion. No sale de aqui.
+    if (pathname === "/api/factura" && req.method === "POST") {
+      const nombreCrudo = decodeURIComponent(req.headers["x-nombre"] ?? "factura.png");
+      const nombre = path.basename(nombreCrudo).replace(/[^\w.\-]+/g, "_");
+      if (!/\.(png|jpe?g)$/i.test(nombre)) {
+        res.writeHead(415, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "Solo se aceptan imagenes PNG o JPG" }));
+        return;
+      }
+
+      const LIMITE = 15 * 1024 * 1024;
+      const trozos = [];
+      let bytes = 0;
+      req.on("data", (d) => {
+        bytes += d.length;
+        if (bytes > LIMITE) {
+          req.destroy();
+          return;
+        }
+        trozos.push(d);
+      });
+      req.on("end", () => {
+        if (bytes === 0 || bytes > LIMITE) {
+          res.writeHead(413, { "content-type": "application/json" });
+          res.end(JSON.stringify({ ok: false, error: "Archivo vacio o demasiado grande (max 15 MB)" }));
+          return;
+        }
+        fs.mkdirSync(facturasSubidasDir, { recursive: true });
+        const ruta = path.join(facturasSubidasDir, `${Date.now()}-${nombre}`);
+        fs.writeFileSync(ruta, Buffer.concat(trozos));
+        const encolada = encolarFactura(ruta, { inmediato: true });
+        res.writeHead(202, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, archivo: path.basename(ruta), encolada }));
+      });
+      return;
+    }
+
     // Disparo manual de la extraccion desde el boton de la UI. Es
-    // idempotente: startExtraction() ignora las llamadas repetidas.
+    // idempotente: trabajar() ignora las llamadas mientras ya esta en marcha.
     if (pathname === "/api/procesar") {
-      if (!hayFuenteDeFacturas) {
+      if (cola.length === 0) {
         res.writeHead(409, { "content-type": "application/json" });
-        res.end(JSON.stringify({ ok: false, error: "Este nodo no tiene facturas configuradas" }));
+        res.end(JSON.stringify({ ok: false, error: "No hay facturas pendientes de procesar" }));
         return;
       }
       void dispararExtraccion();

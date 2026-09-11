@@ -17,6 +17,8 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import fs from "node:fs";
+import os from "node:os";
 import createTestnet from "hyperdht/testnet.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -51,6 +53,8 @@ async function esperarHasta(condicion, limiteMs, queEspero) {
 
 const testnet = await createTestnet(3);
 const topic = `paridad-test-demo-${process.pid}`;
+// Historial en un temporal: el test no debe dejar nada en data/ del repo.
+const datosTmp = fs.mkdtempSync(path.join(os.tmpdir(), "paridad-test-demo-"));
 const hijos = [];
 
 function lanzar(caso) {
@@ -62,6 +66,7 @@ function lanzar(caso) {
       "--topic", topic,
       "--bootstrap", JSON.stringify(testnet.bootstrap),
       "--factura", path.join(FACTURAS, caso.factura),
+      "--datos", path.join(datosTmp, caso.nombre),
     ],
     {
       cwd: REPO,
@@ -222,6 +227,7 @@ try {
 } finally {
   for (const hijo of hijos) hijo.kill();
   await testnet.destroy();
+  fs.rmSync(datosTmp, { recursive: true, force: true });
 }
 
 console.log("\n" + "═".repeat(66));

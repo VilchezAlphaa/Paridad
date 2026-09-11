@@ -65,12 +65,33 @@
 
       <div class="main-grid">
         <div class="col-left">
-          <section class="panel flow-panel" id="flow-panel" aria-label="Recorrido de tu factura">
+          <!-- Pantalla inicial: que es Paridad, la accion principal y un resumen honesto -->
+          <section class="panel landing-panel" aria-label="Inicio">
+            <h1 class="landing-title">Compara tus precios de compra sin compartirlos.</h1>
+            <p class="landing-sub">
+              Tus facturas se leen con IA en este dispositivo. Por la red solo viajan fragmentos
+              matemáticos, nunca un precio.
+            </p>
+
+            <div class="landing-actions">
+              <label class="flow-btn flow-btn-primary" for="factura-input">Agregar factura</label>
+              <input id="factura-input" type="file" accept="image/png,image/jpeg" hidden />
+              <button class="flow-btn" id="procesar-btn" type="button" hidden>Procesar pendientes</button>
+              <span class="landing-hint" id="landing-hint"></span>
+            </div>
+
+            <div class="landing-summary">
+              <div><span class="ls-value" id="ls-facturas">0</span><span class="ls-label">facturas procesadas aquí</span></div>
+              <div><span class="ls-value" id="ls-productos">0</span><span class="ls-label">productos registrados</span></div>
+              <div><span class="ls-value" id="ls-peers">0</span><span class="ls-label">participantes conectados</span></div>
+            </div>
+          </section>
+
+          <!-- Solo visible mientras la IA local trabaja, o justo despues -->
+          <section class="panel flow-panel" id="flow-panel" aria-label="Recorrido de tu factura" hidden>
             <div class="panel-heading">
-              <h2 class="panel-title">El recorrido de tu factura</h2>
-              <p class="panel-sub">
-                Todo lo de la izquierda ocurre en este dispositivo. Solo lo de la derecha cruza la red.
-              </p>
+              <h2 class="panel-title" id="flow-title">Procesando tu factura</h2>
+              <p class="panel-sub" id="flow-subtitle">Todo esto ocurre en este dispositivo.</p>
             </div>
 
             <ol class="flow-steps" id="flow-steps">
@@ -84,102 +105,25 @@
               </li>
               <li class="flow-step" data-step="precio">
                 <span class="flow-mark"></span>
-                <span class="flow-text"><b>Precio protegido</b><span class="flow-sub" id="flow-precio">&mdash;</span></span>
-              </li>
-              <li class="flow-step" data-step="p2p">
-                <span class="flow-mark"></span>
-                <span class="flow-text"><b>Red P2P</b><span class="flow-sub" id="flow-p2p">&mdash;</span></span>
-              </li>
-              <li class="flow-step" data-step="agregacion">
-                <span class="flow-mark"></span>
-                <span class="flow-text"><b>Agregación privada</b><span class="flow-sub" id="flow-agg">&mdash;</span></span>
-              </li>
-              <li class="flow-step" data-step="resultado">
-                <span class="flow-mark"></span>
-                <span class="flow-text"><b>Referencia del grupo</b><span class="flow-sub" id="flow-res">&mdash;</span></span>
+                <span class="flow-text"><b>Precios protegidos</b><span class="flow-sub" id="flow-precio">&mdash;</span></span>
               </li>
             </ol>
 
-            <button class="flow-btn" id="procesar-btn" type="button" hidden>Procesar facturas</button>
-
-            <div class="flow-bottom">
-              <div class="flow-result" id="flow-result" hidden>
-                <div class="flow-result-head" id="flow-result-product">&mdash;</div>
-                <div class="flow-result-grid">
-                  <div>
-                    <span class="flow-result-lbl">Tu precio</span>
-                    <span class="flow-result-val" id="flow-result-mine">&mdash;</span>
-                  </div>
-                  <div>
-                    <span class="flow-result-lbl">Referencia del grupo</span>
-                    <span class="flow-result-val" id="flow-result-group">&mdash;</span>
-                  </div>
-                  <div>
-                    <span class="flow-result-lbl">Tu posición</span>
-                    <span class="flow-result-val" id="flow-result-pos">&mdash;</span>
-                  </div>
-                </div>
-                <p class="flow-result-note" id="flow-result-note">&mdash;</p>
-              </div>
-
-              <figure class="p2p-figure">
-                <svg viewBox="0 0 120 104" width="120" height="104" aria-hidden="true">
-                  <line id="edge-self-1" class="p2p-edge" x1="24" y1="80" x2="96" y2="80" />
-                  <line id="edge-self-2" class="p2p-edge" x1="24" y1="80" x2="60" y2="20" />
-                  <line id="edge-far" class="p2p-edge p2p-edge-unknown" x1="96" y1="80" x2="60" y2="20" />
-                  <circle id="node-self" class="p2p-node p2p-node-self" cx="24" cy="80" r="9" />
-                  <circle id="node-1" class="p2p-node" cx="96" cy="80" r="9" />
-                  <circle id="node-2" class="p2p-node" cx="60" cy="20" r="9" />
-                  <text id="label-self" class="p2p-label" x="24" y="84">A</text>
-                  <text id="label-1" class="p2p-label" x="96" y="84">B</text>
-                  <text id="label-2" class="p2p-label" x="60" y="24">C</text>
-                </svg>
-                <figcaption id="p2p-caption">&mdash;</figcaption>
-              </figure>
+            <div class="flow-result" id="flow-result" hidden>
+              <div class="flow-result-head" id="flow-result-product">&mdash;</div>
+              <div class="rows rows-compact" id="flow-result-rows"></div>
+              <p class="flow-result-note">Estos precios son tuyos y se quedan en tu dispositivo. Los de otros negocios nunca se muestran.</p>
             </div>
           </section>
 
-          <section class="panel top5-panel" aria-label="Lo que mas compras">
+          <!-- Historial local -->
+          <section class="panel compras-panel" aria-label="Mis compras">
             <div class="panel-heading">
-              <h2 class="panel-title">Lo que más compras</h2>
-              <p class="panel-sub">
-                Comparado con el promedio anonimo del grupo &mdash; nadie ve el precio de nadie
-              </p>
+              <h2 class="panel-title">Mis compras</h2>
+              <p class="panel-sub" id="compras-sub">Todo lo extraído de tus facturas, guardado en este dispositivo.</p>
             </div>
-
-            <div class="rows" id="product-rows">
-              <div class="row">
-                <span class="row-rank">01</span>
-                <span class="row-name"><span class="prod-name">Sin datos</span></span>
-              </div>
-            </div>
-
-            <p class="auto-detect-note">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="3.2" />
-                <path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" />
-              </svg>
-              <span id="extract-note">La IA local detecta sola las facturas que guardes en tu carpeta &mdash; nada se sube a la nube</span>
-            </p>
+            <div class="rows" id="compras-rows"></div>
           </section>
-
-          <div class="kpi-row">
-            <div class="kpi-card">
-              <div class="kpi-label">Ahorro potencial</div>
-              <div class="kpi-value accent" id="kpi-savings">&mdash;</div>
-              <div class="kpi-sub">por ciclo de compra, pagando el promedio del grupo</div>
-            </div>
-            <div class="kpi-card">
-              <div class="kpi-label">Puedes ahorrar en</div>
-              <div class="kpi-value" id="kpi-savings-count">&mdash;</div>
-              <div class="kpi-sub" id="kpi-savings-count-sub">esperando las rondas del grupo</div>
-            </div>
-            <div class="kpi-card">
-              <div class="kpi-label">Participantes</div>
-              <div class="kpi-value" id="kpi-participants">&mdash;</div>
-              <div class="kpi-sub">negocios comparando en el grupo</div>
-            </div>
-          </div>
         </div>
 
         <div class="col-right">

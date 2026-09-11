@@ -34,13 +34,24 @@ const facturasDir = path.join(__dirname, "demo-data", "facturas");
 
 const manual = process.argv.includes("--manual");
 
-// Una factura real por participante. Los precios NO estan aqui: salen del
+// Facturas reales por participante. Los precios NO estan aqui: salen del
 // OCR de cada imagen (4700 / 3100 / 5200 centavos de "Aceite Motor 20W50").
+//
+// A procesa ademas una factura de CINCO productos: asi la demo ensena el
+// historial local completo (5 productos registrados de una sola factura) y
+// la regla de comparacion honesta: solo el aceite, que tienen los tres, sale
+// con referencia del grupo; los otros cuatro quedan "Sin comparacion
+// disponible" en vez de inventarse una.
 const NODES = [
-  { name: "A", port: 4700, factura: "factura-demo-a.png" },
-  { name: "B", port: 4701, factura: "factura-demo-b.png" },
-  { name: "C", port: 4702, factura: "factura-demo-c.png" },
+  { name: "A", port: 4700, facturas: ["factura-demo-a.png", "factura-demo-multi.png"] },
+  { name: "B", port: 4701, facturas: ["factura-demo-b.png"] },
+  { name: "C", port: 4702, facturas: ["factura-demo-c.png"] },
 ];
+
+// Historial de la demo aparte del de uso real (data/nodo-X). Se conserva
+// entre corridas: como cada factura se identifica por su contenido,
+// repetir la demo no duplica registros. Borra data/demo/ para empezar de cero.
+const datosDemoDir = path.join(__dirname, "data", "demo");
 
 // Margen amplio: la primera vez QVAC puede tener que descargar modelos.
 const ESPERA_MAX_EXTRACCION_MS = 240_000;
@@ -51,6 +62,7 @@ const topicSeed = `paridad-demo-local-${process.pid}`;
 
 console.log("🎬 Demo de Paridad — 3 nodos en esta maquina, DHT local, QVAC real");
 console.log(`   Facturas: ${facturasDir}`);
+console.log(`   Historial local de cada nodo: ${path.join(datosDemoDir, "nodo-<X>", "historial.json")}`);
 console.log(
   manual
     ? "   Modo manual: pulsa «Procesar facturas» en cada UI, DE UNA EN UNA.\n"
@@ -60,7 +72,7 @@ console.log(
 const children = [];
 let cerrando = false;
 
-function lanzarNodo({ name, port, factura }) {
+function lanzarNodo({ name, port, facturas }) {
   const child = spawn(
     process.execPath,
     [
@@ -68,7 +80,8 @@ function lanzarNodo({ name, port, factura }) {
       "--port", String(port),
       "--topic", topicSeed,
       "--bootstrap", bootstrapJson,
-      "--factura", path.join(facturasDir, factura),
+      "--datos", path.join(datosDemoDir, `nodo-${name}`),
+      ...facturas.flatMap((f) => ["--factura", path.join(facturasDir, f)]),
       ...(manual ? ["--manual"] : []),
     ],
     { stdio: ["ignore", "pipe", "pipe"] }

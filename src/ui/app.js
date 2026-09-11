@@ -2,7 +2,7 @@
 // QVAC: solo recibe un estado (subscribe(callback)) y lo pinta. Fuente
 // real por SSE si la sirve nodo-paridad.mjs; mock si es estatica.
 import { NETWORK_STATE } from "../network/network-state.mjs";
-import { pickDataSource, formatPrice, buildItemRow } from "./ui-common.js";
+import { pickDataSource, formatPrice } from "./ui-common.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -30,37 +30,6 @@ function renderHeader(state) {
     sync.textContent = "Buscando peers…";
     sync.dataset.tone = "warn";
   }
-}
-
-function renderProducts(state) {
-  const rows = $("product-rows");
-  rows.replaceChildren();
-
-  if (!state.items.length) {
-    const row = document.createElement("div");
-    row.className = "row";
-    row.innerHTML = `<span class="row-rank">01</span><span class="row-name"><span class="prod-name">Sin datos</span></span>`;
-    rows.append(row);
-    return;
-  }
-
-  // El dashboard muestra hasta 5; la lista completa vive en productos.html.
-  state.items.slice(0, 5).forEach((item, index) => rows.append(buildItemRow(item, index)));
-}
-
-function renderKpis(state) {
-  const { potentialSavings, savingsCount, benchmarkedCount, totalItems, participants } = state.summary;
-
-  $("kpi-savings").textContent = benchmarkedCount > 0 ? formatPrice(potentialSavings) : "—";
-
-  const count = $("kpi-savings-count");
-  count.textContent = benchmarkedCount > 0 ? `${savingsCount} de ${benchmarkedCount}` : "—";
-  $("kpi-savings-count-sub").textContent =
-    benchmarkedCount > 0
-      ? `productos comparados (${totalItems} en total)`
-      : "esperando las rondas del grupo";
-
-  $("kpi-participants").textContent = String(participants);
 }
 
 function renderStatus(state) {
@@ -109,173 +78,169 @@ function renderStatus(state) {
   $("privacy-note").textContent = state.privacy.note;
 }
 
-function renderExtraction(state) {
-  const note = $("extract-note");
-  const ex = state.extraction;
+// --- pantalla inicial ---------------------------------------------------
 
-  if (!ex || ex.status === "DISABLED") {
-    note.textContent =
-      "La IA local detecta sola las facturas que guardes en tu carpeta — nada se sube a la nube";
-    return;
-  }
-  if (ex.status === "LOADING_AI") {
-    note.textContent = "Cargando la IA local (QVAC)… los modelos corren en este dispositivo";
-    return;
-  }
-  if (ex.status === "PROCESSING") {
-    const step = (ok, label) => `${ok ? "✓" : "…"} ${label}`;
-    note.textContent =
-      `Procesando ${ex.currentFile}:  ${step(ex.steps.cargada, "Factura cargada")}  ` +
-      `${step(ex.steps.ia, "IA local")}  ${step(ex.steps.producto, "Producto")}  ${step(ex.steps.precio, "Precio")}`;
-    return;
-  }
-  if (ex.status === "ERROR" || ex.error) {
-    note.textContent = `⚠ Extracción con problema: ${ex.error ?? "error desconocido"}`;
-    return;
-  }
-  // READY
-  note.textContent =
-    `✓ IA local lista — ${ex.processed} factura(s) procesadas en este dispositivo` +
-    (ex.folder ? ` · vigilando ${ex.folder}` : "");
+function renderLanding(state) {
+  const h = state.historial ?? { resumen: { facturas: 0, productos: 0 } };
+  $("ls-facturas").textContent = String(h.resumen.facturas);
+  $("ls-productos").textContent = String(h.resumen.productos);
+  $("ls-peers").textContent = `${state.network.identifiedPeers.length + 1} / ${state.network.expectedPeerCount + 1}`;
+
+  const ex = state.extraction ?? { status: "IDLE", pendientes: 0 };
+  const btn = $("procesar-btn");
+  const pendientes = ex.pendientes ?? 0;
+  btn.hidden = !(ex.status === "IDLE" && pendientes > 0);
+  btn.textContent = pendientes === 1 ? "Procesar 1 factura pendiente" : `Procesar ${pendientes} facturas pendientes`;
+
+  const hint = $("landing-hint");
+  if (ex.status === "LOADING_AI") hint.textContent = "Cargando la IA local…";
+  else if (ex.status === "PROCESSING") hint.textContent = `Leyendo ${ex.currentFile}…`;
+  else if (ex.status === "ERROR") hint.textContent = `⚠ ${ex.error ?? "fallo del pipeline"}`;
+  else hint.textContent = "PNG o JPG · se procesa en este dispositivo";
+
+  // Subir una factura: va al proceso local (localhost), nunca a un servidor.
+  $("factura-input").disabled = ex.status === "LOADING_AI" || ex.status === "PROCESSING";
 }
 
-// --- panel "El recorrido de tu factura" -----------------------------------
-//
-// Cada paso se pinta con el estado REAL que publica el nodo local: nada
-// aqui se adelanta ni se simula. "done" es un hecho ya ocurrido, "active"
-// es lo que esta pasando ahora mismo y "" es lo que todavia no ha pasado.
+// --- panel de procesamiento (solo mientras trabaja o justo despues) ---------
 
 function marcarPaso(nombre, estado, texto) {
   const li = document.querySelector(`.flow-step[data-step="${nombre}"]`);
   if (li) li.dataset.state = estado;
-  const sub = $(`flow-${nombre === "agregacion" ? "agg" : nombre === "resultado" ? "res" : nombre}`);
+  const sub = $(`flow-${nombre}`);
   if (sub) sub.textContent = texto;
 }
 
+function etiquetaComparacion(c) {
+  if (!c) return { label: "Comparación pendiente", className: "", detail: "" };
+  if (c.estado === "DISPONIBLE") {
+    const pct = c.posicionPct;
+    const signo = pct >= 0 ? "+" : "";
+    return {
+      label: `Referencia ${formatPrice(c.referencia)}`,
+      className: pct > 1 ? "over" : "good",
+      detail: `${signo}${pct.toFixed(1)}% · ${c.participantes} negocios`,
+    };
+  }
+  if (c.estado === "NO_DISPONIBLE") {
+    return { label: "Sin comparación disponible", className: "", detail: c.motivo ?? "" };
+  }
+  return { label: "Comparación pendiente", className: "", detail: "esperando al grupo" };
+}
+
+/** Fila de un registro del historial: producto, TU precio, y su comparación. */
+function filaRegistro(r, index) {
+  const cmp = etiquetaComparacion(r.comparacion);
+  const row = document.createElement("div");
+  row.className = `row${cmp.className ? ` row-${cmp.className}` : ""}`;
+
+  const rank = document.createElement("span");
+  rank.className = "row-rank";
+  rank.textContent = String(index + 1).padStart(2, "0");
+
+  const nameWrap = document.createElement("span");
+  nameWrap.className = "row-name";
+  const prodName = document.createElement("span");
+  prodName.className = "prod-name";
+  prodName.textContent = r.product;
+  const meta = document.createElement("span");
+  meta.className = "row-proveedor";
+  meta.textContent = `${r.quantity} und · ${r.archivo}`;
+  nameWrap.append(prodName, meta);
+
+  const yourPrice = document.createElement("span");
+  yourPrice.className = "price";
+  yourPrice.innerHTML = `<span class="lbl">Tú pagas</span>`;
+  yourPrice.append(formatPrice(r.unitPrice));
+
+  const verdictEl = document.createElement("span");
+  verdictEl.className = `verdict${cmp.className ? ` ${cmp.className}` : ""}`;
+  verdictEl.innerHTML = `<span class="verdict-label"></span><span class="verdict-pct"></span>`;
+  verdictEl.querySelector(".verdict-label").textContent = cmp.label;
+  verdictEl.querySelector(".verdict-pct").textContent = cmp.detail;
+
+  row.append(rank, nameWrap, yourPrice, verdictEl);
+  return row;
+}
+
 function renderFlow(state) {
-  const ex = state.extraction ?? { status: "DISABLED" };
-  const item = state.items[0] ?? null;
-  const conectado = state.network.status === NETWORK_STATE.READY_FOR_AGGREGATION;
+  const ex = state.extraction ?? { status: "IDLE" };
+  const panel = $("flow-panel");
+  const trabajando = ex.status === "LOADING_AI" || ex.status === "PROCESSING";
+  const ultima = ex.ultimaFactura;
 
-  // 1. Factura
-  if (ex.status === "DISABLED") {
-    marcarPaso("factura", "", "este nodo no procesa facturas");
-  } else if (ex.processed > 0) {
-    marcarPaso("factura", "done", `${ex.processed} procesada(s) en este dispositivo`);
-  } else if (ex.status === "PROCESSING") {
-    marcarPaso("factura", "done", `${ex.currentFile} cargada`);
-  } else {
-    marcarPaso("factura", "", `${ex.total ?? 0} en cola`);
-  }
+  // Se muestra mientras trabaja, y despues como "Factura procesada" con
+  // los productos de ESA factura. Sin nada que contar, se oculta.
+  panel.hidden = !trabajando && !ultima && ex.status !== "ERROR";
+  if (panel.hidden) return;
 
-  // 2. IA local
-  if (ex.status === "LOADING_AI") {
-    marcarPaso("ia", "active", "cargando los modelos en este dispositivo…");
-  } else if (ex.status === "PROCESSING") {
-    marcarPaso("ia", "active", "extrayendo producto y precio…");
+  if (trabajando) {
+    $("flow-title").textContent = "Procesando tu factura";
+    $("flow-subtitle").textContent = "Todo esto ocurre en este dispositivo.";
   } else if (ex.status === "ERROR") {
-    marcarPaso("ia", "error", ex.error ?? "fallo del pipeline");
-  } else if (ex.processed > 0) {
-    marcarPaso("ia", "done", `procesamiento completado · ${state.localAi.model}`);
-  } else if (ex.status === "DISABLED") {
-    marcarPaso("ia", "", "sin facturas que procesar");
+    $("flow-title").textContent = "No se pudo procesar";
+    $("flow-subtitle").textContent = ex.error ?? "";
   } else {
-    marcarPaso("ia", "", "en espera");
+    $("flow-title").textContent = "Factura procesada";
+    $("flow-subtitle").textContent =
+      ultima.lineas === 1 ? "1 producto registrado" : `${ultima.lineas} productos registrados`;
   }
 
-  // 3. Precio protegido (el precio se conoce, pero no viaja)
-  if (item) {
-    marcarPaso("precio", "done", `${item.display ?? item.product} · solo tú lo ves`);
-  } else {
-    marcarPaso("precio", "", "aún sin dato local");
-  }
+  if (ex.status === "PROCESSING") marcarPaso("factura", "done", `${ex.currentFile} cargada`);
+  else if (ultima) marcarPaso("factura", "done", ultima.archivo);
+  else marcarPaso("factura", "", "en cola");
 
-  // 4. Red P2P
-  const peers = state.network.identifiedPeers.length;
-  marcarPaso(
-    "p2p",
-    conectado ? "done" : peers > 0 ? "active" : "",
-    conectado ? `conexión directa con ${state.network.identifiedPeers.join(" y ")}` : `${peers}/${state.network.expectedPeerCount} participantes`
-  );
+  if (ex.status === "LOADING_AI") marcarPaso("ia", "active", "cargando los modelos en este dispositivo…");
+  else if (ex.status === "PROCESSING") marcarPaso("ia", "active", "extrayendo productos y precios…");
+  else if (ex.status === "ERROR") marcarPaso("ia", "error", ex.error ?? "fallo");
+  else marcarPaso("ia", "done", `procesamiento completado · ${state.localAi.model}`);
 
-  // 5. Agregacion privada
-  const compartiendo = item?.status === "SHARING";
-  const listo = item?.status === "DONE";
-  marcarPaso(
-    "agregacion",
-    listo ? "done" : compartiendo ? "active" : "",
-    listo
-      ? `${state.privacy.sharesExchanged} fragmentos intercambiados, ningún precio`
-      : compartiendo
-        ? "intercambiando fragmentos…"
-        : "esperando al grupo"
-  );
+  if (ultima && !trabajando) marcarPaso("precio", "done", "solo tú los ves; por la red no viaja ninguno");
+  else marcarPaso("precio", "", "aún sin datos");
 
-  // 6. Resultado
-  marcarPaso("resultado", listo ? "done" : "", listo ? "referencia calculada en este dispositivo" : "—");
-
-  // Boton de disparo manual: solo cuando de verdad hay algo que disparar.
-  const btn = $("procesar-btn");
-  btn.hidden = !(ex.status === "IDLE");
-
-  // Tarjeta de resultado
   const card = $("flow-result");
-  if (listo) {
+  if (ultima && !trabajando) {
     card.hidden = false;
-    $("flow-result-product").textContent = item.display ?? item.product;
-    $("flow-result-mine").textContent = formatPrice(item.unitPrice);
-    $("flow-result-group").textContent = formatPrice(item.groupAverage);
-    const pct = item.positionPercent;
-    $("flow-result-pos").textContent = `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
-    $("flow-result-pos").dataset.tone = pct > 1 ? "over" : pct < -1 ? "good" : "";
-    $("flow-result-note").textContent =
-      pct > 1
-        ? "Pagas por encima de la referencia del grupo."
-        : pct < -1
-          ? "Pagas por debajo de la referencia del grupo."
-          : "Pagas prácticamente la referencia del grupo.";
+    $("flow-result-product").textContent = ultima.archivo;
+    const rows = $("flow-result-rows");
+    rows.replaceChildren();
+    (state.historial?.registros ?? [])
+      .filter((r) => r.facturaId === ultima.id)
+      .forEach((r, i) => rows.append(filaRegistro(r, i)));
   } else {
     card.hidden = true;
   }
-
-  renderP2pFigure(state);
 }
 
-/**
- * Triangulo A-B-C. Solo se pintan como conocidas las dos aristas de ESTE
- * nodo: un participante no puede saber si los otros dos estan conectados
- * entre si, y dibujarlo como si lo supiera seria inventarlo.
- */
-function renderP2pFigure(state) {
-  const self = state.nodeName ?? "?";
-  const otros = state.settings?.participants ?? ["A", "B", "C"];
-  const peers = otros.filter((p) => p !== self);
-  const identificados = new Set(state.network.identifiedPeers);
+// --- Mis compras --------------------------------------------------------
 
-  $("label-self").textContent = self;
-  $("label-1").textContent = peers[0] ?? "?";
-  $("label-2").textContent = peers[1] ?? "?";
+function renderCompras(state) {
+  const rows = $("compras-rows");
+  rows.replaceChildren();
+  const registros = state.historial?.registros ?? [];
+  const resumen = state.historial?.resumen ?? { facturas: 0, productos: 0 };
 
-  const pintar = (edgeId, nodeId, peer) => {
-    const on = identificados.has(peer);
-    $(edgeId).classList.toggle("on", on);
-    $(nodeId).classList.toggle("on", on);
-  };
-  pintar("edge-self-1", "node-1", peers[0]);
-  pintar("edge-self-2", "node-2", peers[1]);
+  $("compras-sub").textContent = registros.length
+    ? `${resumen.productos} producto(s) de ${resumen.facturas} factura(s), guardados en este dispositivo.`
+    : "Todo lo extraído de tus facturas, guardado en este dispositivo.";
 
-  $("p2p-caption").textContent =
-    `${identificados.size + 1} de ${otros.length} participantes · ${identificados.size} conexión(es) directa(s) desde ${self}`;
+  if (!registros.length) {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<span class="row-rank">—</span><span class="row-name"><span class="prod-name">Todavía no hay compras. Agrega una factura para empezar.</span></span>`;
+    rows.append(row);
+    return;
+  }
+  registros.forEach((r, i) => rows.append(filaRegistro(r, i)));
 }
 
 function render(state) {
   $("mock-banner").hidden = !state.isMock;
   renderHeader(state);
+  renderLanding(state);
   renderFlow(state);
-  renderProducts(state);
-  renderKpis(state);
+  renderCompras(state);
   renderStatus(state);
-  renderExtraction(state);
 }
 
 $("procesar-btn").addEventListener("click", async (event) => {
@@ -286,6 +251,26 @@ $("procesar-btn").addEventListener("click", async (event) => {
     // Si falla, el proximo estado por SSE volvera a mostrar el boton.
   } finally {
     event.currentTarget.disabled = false;
+  }
+});
+
+$("factura-input").addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  $("landing-hint").textContent = `Enviando ${file.name} al proceso local…`;
+  try {
+    const res = await fetch("/api/factura", {
+      method: "POST",
+      headers: { "x-nombre": encodeURIComponent(file.name), "content-type": file.type || "application/octet-stream" },
+      body: file,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      $("landing-hint").textContent = `⚠ ${err.error ?? `error ${res.status}`}`;
+    }
+  } catch (err) {
+    $("landing-hint").textContent = `⚠ ${err.message}`;
   }
 });
 

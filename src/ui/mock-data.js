@@ -49,7 +49,18 @@ const MOCK_STATE = Object.freeze({
     participants: 3,
   },
 
-  extraction: { status: "DISABLED" },
+  extraction: { status: "IDLE", pendientes: 0, processed: 0, ultimaFactura: null },
+
+  // Historial local mock: la misma forma que publica nodo-paridad.mjs.
+  historial: {
+    resumen: { facturas: 1, productos: 5, productosDistintos: 5 },
+    facturas: [{ id: "mock-1", archivo: "factura-mock.png", procesadaEn: "2026-03-19T10:00:00.000Z", lineas: 5 }],
+    registros: [
+      { id: "mock-1-1", facturaId: "mock-1", archivo: "factura-mock.png", procesadaEn: "2026-03-19T10:00:00.000Z", product: "ACEITE MOTOR 20W50", productCanonical: "aceite motor 20w50", quantity: 4, unitPrice: 47.0, comparacion: { estado: "DISPONIBLE", referencia: 43.33, posicionPct: 8.5, participantes: 3 } },
+      { id: "mock-1-2", facturaId: "mock-1", archivo: "factura-mock.png", procesadaEn: "2026-03-19T10:00:00.000Z", product: "FILTRO DE ACEITE", productCanonical: "filtro de aceite", quantity: 12, unitPrice: 6.8, comparacion: { estado: "PENDIENTE" } },
+      { id: "mock-1-3", facturaId: "mock-1", archivo: "factura-mock.png", procesadaEn: "2026-03-19T10:00:00.000Z", product: "PASTILLAS DE FRENO DELANT", productCanonical: "pastillas de freno delant", quantity: 6, unitPrice: 28.5, comparacion: { estado: "NO_DISPONIBLE", motivo: "no hay suficientes negocios con este producto" } },
+    ],
+  },
 
   settings: {
     port: 4700,

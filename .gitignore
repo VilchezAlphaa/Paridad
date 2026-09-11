@@ -3,3 +3,6 @@ node_modules/
 .env.*
 *.log
 
+# Datos locales de cada nodo (historial de compras, facturas subidas).
+# Son del dispositivo del usuario: nunca se versionan ni se comparten.
+data/
