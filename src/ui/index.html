@@ -3,195 +3,123 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Paridad — Resumen</title>
+    <title>Paridad</title>
+    <link rel="icon" type="image/png" href="brand/paridad-logo-96.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,650&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="paridad.css" />
   </head>
   <body>
-    <div id="mock-banner" class="mock-banner" hidden>
-      DATOS DE PRUEBA (MOCK) &mdash; todavia no conectado a la red ni a QVAC
-    </div>
+    <div id="mock-banner" class="mock-banner" hidden>Datos de prueba — sin nodo local</div>
 
-    <div id="app">
-      <header>
-        <div class="brand-block">
-          <div class="brand">
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-              <circle cx="6" cy="18" r="2.4" fill="currentColor" />
-              <circle cx="18" cy="18" r="2.4" fill="currentColor" />
-              <circle cx="12" cy="6" r="2.4" fill="currentColor" />
-              <line x1="6" y1="18" x2="18" y2="18" stroke="currentColor" stroke-width="1.6" />
-              <line x1="6" y1="18" x2="12" y2="6" stroke="currentColor" stroke-width="1.6" />
-              <line x1="18" y1="18" x2="12" y2="6" stroke="currentColor" stroke-width="1.6" />
-            </svg>
-            Paridad
-          </div>
-          <div class="brand-sub" id="node-label">&mdash;</div>
-        </div>
+    <!--
+      Una sola pagina y cuatro vistas: idle, processing, results, history.
+      app.js decide cual mostrar a partir del estado REAL que publica
+      nodo-paridad.mjs por SSE. Aqui no hay logica de negocio.
+    -->
+    <div class="app">
+      <header class="top">
+        <a class="brand" href="./" aria-label="Paridad, inicio">
+          <img src="brand/paridad-logo-96.png" width="30" height="31" alt="" />
+          <span>Paridad</span>
+        </a>
 
-        <div class="header-right">
-          <span class="sync-text" id="sync-text">&mdash;</span>
-          <div class="avatar-circle" id="avatar">&mdash;</div>
-        </div>
+        <nav class="nav" aria-label="Principal">
+          <button class="nav-btn" id="nav-add" type="button">+ Agregar factura</button>
+          <button class="nav-link" id="nav-history" type="button">Facturas agregadas</button>
+        </nav>
       </header>
 
-      <section class="status-strip" aria-label="Estado del sistema">
-        <div class="status-chip">
-          <span class="status-label">P2P</span>
-          <span class="status-value" id="st-p2p">&mdash;</span>
-        </div>
-        <div class="status-chip">
-          <span class="status-label">Peers</span>
-          <span class="status-value" id="st-peers">&mdash;</span>
-        </div>
-        <div class="status-chip">
-          <span class="status-label">IA local</span>
-          <span class="status-value" id="st-ai">&mdash;</span>
-        </div>
-        <div class="status-chip">
-          <span class="status-label">Cloud AI</span>
-          <span class="status-value" id="st-cloud">&mdash;</span>
-        </div>
-        <div class="status-chip">
-          <span class="status-label">Shares enviados</span>
-          <span class="status-value" id="st-shares">&mdash;</span>
-        </div>
-      </section>
+      <!-- Estado del grupo: existe, pero no compite con el flujo principal -->
+      <p class="group" id="group-status"><span class="dot"></span><span id="group-text">—</span></p>
 
-      <div class="main-grid">
-        <div class="col-left">
-          <!-- Pantalla inicial: que es Paridad, la accion principal y un resumen honesto -->
-          <section class="panel landing-panel" aria-label="Inicio">
-            <h1 class="landing-title">Compara tus precios de compra sin compartirlos.</h1>
-            <p class="landing-sub">
-              Tus facturas se leen con IA en este dispositivo. Por la red solo viajan fragmentos
-              matemáticos, nunca un precio.
-            </p>
+      <main class="main">
+        <!-- ============ 1. INICIO (empty state) ============ -->
+        <section class="view view-idle" id="view-idle" hidden>
+          <img class="hero-logo" src="brand/paridad-logo-512.png" width="112" height="115" alt="" />
+          <h1 class="hero-title">Compara tus precios de compra sin compartirlos.</h1>
 
-            <div class="landing-actions">
-              <label class="flow-btn flow-btn-primary" for="factura-input">Agregar factura</label>
-              <input id="factura-input" type="file" accept="image/png,image/jpeg" hidden />
-              <button class="flow-btn" id="procesar-btn" type="button" hidden>Procesar pendientes</button>
-              <span class="landing-hint" id="landing-hint"></span>
-            </div>
+          <ol class="stepper" id="stepper-idle">
+            <li data-state="active"><span>01</span>Tu factura</li>
+            <li><span>02</span>IA local</li>
+            <li><span>03</span>Resultados</li>
+          </ol>
 
-            <div class="landing-summary">
-              <div><span class="ls-value" id="ls-facturas">0</span><span class="ls-label">facturas procesadas aquí</span></div>
-              <div><span class="ls-value" id="ls-productos">0</span><span class="ls-label">productos registrados</span></div>
-              <div><span class="ls-value" id="ls-peers">0</span><span class="ls-label">participantes conectados</span></div>
-            </div>
-          </section>
+          <button class="cta" id="cta-main" type="button">Cargar factura</button>
+          <input id="factura-input" type="file" accept="image/png,image/jpeg" hidden />
 
-          <!-- Solo visible mientras la IA local trabaja, o justo despues -->
-          <section class="panel flow-panel" id="flow-panel" aria-label="Recorrido de tu factura" hidden>
-            <div class="panel-heading">
-              <h2 class="panel-title" id="flow-title">Procesando tu factura</h2>
-              <p class="panel-sub" id="flow-subtitle">Todo esto ocurre en este dispositivo.</p>
-            </div>
+          <p class="hero-note">Tu factura se procesa en este dispositivo.</p>
+          <p class="hero-note muted">Los precios individuales no se comparten.</p>
+        </section>
 
-            <ol class="flow-steps" id="flow-steps">
-              <li class="flow-step" data-step="factura">
-                <span class="flow-mark"></span>
-                <span class="flow-text"><b>Factura</b><span class="flow-sub" id="flow-factura">&mdash;</span></span>
-              </li>
-              <li class="flow-step" data-step="ia">
-                <span class="flow-mark"></span>
-                <span class="flow-text"><b>IA local</b><span class="flow-sub" id="flow-ia">&mdash;</span></span>
-              </li>
-              <li class="flow-step" data-step="precio">
-                <span class="flow-mark"></span>
-                <span class="flow-text"><b>Precios protegidos</b><span class="flow-sub" id="flow-precio">&mdash;</span></span>
-              </li>
-            </ol>
+        <!-- ============ 2. PROCESANDO ============ -->
+        <section class="view view-processing" id="view-processing" hidden>
+          <ol class="stepper" id="stepper-processing">
+            <li data-state="done"><span>01</span>Tu factura</li>
+            <li data-state="active"><span>02</span>IA local</li>
+            <li><span>03</span>Resultados</li>
+          </ol>
 
-            <div class="flow-result" id="flow-result" hidden>
-              <div class="flow-result-head" id="flow-result-product">&mdash;</div>
-              <div class="rows rows-compact" id="flow-result-rows"></div>
-              <p class="flow-result-note">Estos precios son tuyos y se quedan en tu dispositivo. Los de otros negocios nunca se muestran.</p>
-            </div>
-          </section>
+          <h2 class="view-title">Analizando tu factura</h2>
 
-          <!-- Historial local -->
-          <section class="panel compras-panel" aria-label="Mis compras">
-            <div class="panel-heading">
-              <h2 class="panel-title">Mis compras</h2>
-              <p class="panel-sub" id="compras-sub">Todo lo extraído de tus facturas, guardado en este dispositivo.</p>
-            </div>
-            <div class="rows" id="compras-rows"></div>
-          </section>
-        </div>
+          <ul class="checklist" id="checklist">
+            <li data-state="done">Factura cargada</li>
+            <li data-state="active" id="chk-ia">IA local procesando</li>
+            <li id="chk-productos">Productos identificados</li>
+            <li id="chk-datos">Datos protegidos</li>
+          </ul>
 
-        <div class="col-right">
-          <div class="col-right-label">Opciones</div>
+          <p class="hero-note">La factura se procesa localmente.</p>
+        </section>
 
-          <div class="options-grid">
-            <a class="opt-card" href="calculadora.html">
-              <div class="opt-icon copper">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <rect x="5" y="3" width="14" height="18" rx="2" />
-                  <line x1="8" y1="7" x2="16" y2="7" />
-                  <line x1="8" y1="11" x2="8.01" y2="11" />
-                  <line x1="12" y1="11" x2="12.01" y2="11" />
-                  <line x1="16" y1="11" x2="16.01" y2="11" />
-                  <line x1="8" y1="15" x2="8.01" y2="15" />
-                  <line x1="12" y1="15" x2="12.01" y2="15" />
-                  <line x1="16" y1="15" x2="16.01" y2="15" />
-                </svg>
-              </div>
-              <div class="opt-label">Calculadora de ahorro</div>
-            </a>
+        <!-- ============ 3. RESULTADOS ============ -->
+        <section class="view view-results" id="view-results" hidden>
+          <ol class="stepper" id="stepper-results">
+            <li data-state="done"><span>01</span>Tu factura</li>
+            <li data-state="done"><span>02</span>IA local</li>
+            <li data-state="active"><span>03</span>Resultados</li>
+          </ol>
 
-            <a class="opt-card" href="productos.html">
-              <div class="opt-icon teal">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <line x1="4" y1="6" x2="20" y2="6" />
-                  <line x1="4" y1="12" x2="20" y2="12" />
-                  <line x1="4" y1="18" x2="20" y2="18" />
-                </svg>
-              </div>
-              <div class="opt-label">Ver todos los productos</div>
-            </a>
-
-            <a class="opt-card" href="proveedores.html">
-              <div class="opt-icon teal">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M3 9.5L12 3l9 6.5" />
-                  <path d="M5 9.5V21h14V9.5" />
-                  <line x1="10" y1="21" x2="10" y2="14" />
-                  <line x1="14" y1="21" x2="14" y2="14" />
-                </svg>
-              </div>
-              <div class="opt-label">Proveedores</div>
-            </a>
-
-            <a class="opt-card" href="ajustes.html">
-              <div class="opt-icon teal">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="3.2" />
-                  <path d="M12 2.5v3.2M12 18.3v3.2M4.6 4.6l2.3 2.3M17.1 17.1l2.3 2.3M2.5 12h3.2M18.3 12h3.2M4.6 19.4l2.3-2.3M17.1 6.9l2.3-2.3" />
-                </svg>
-              </div>
-              <div class="opt-label">Ajustes</div>
-            </a>
+          <div class="results-head">
+            <h2 class="view-title">Tu compra</h2>
+            <p class="view-sub" id="results-sub">—</p>
           </div>
 
-          <section class="panel privacy-panel" aria-label="Privacidad">
-            <h3 class="privacy-title">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="4" y="11" width="16" height="10" rx="2" />
-                <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-              </svg>
-              Privacidad garantizada
-            </h3>
-            <p class="privacy-note" id="privacy-note">&mdash;</p>
-          </section>
-        </div>
-      </div>
+          <table class="products" aria-label="Productos de tu compra">
+            <thead>
+              <tr><th>Producto</th><th class="num">Tu precio</th><th>Comparación</th></tr>
+            </thead>
+            <tbody id="results-rows"></tbody>
+          </table>
+
+          <p class="results-foot" id="results-foot"></p>
+          <p class="results-more"><button class="nav-link" id="results-history" type="button">Ver todas las facturas</button></p>
+        </section>
+
+        <!-- ============ 4. FACTURAS AGREGADAS ============ -->
+        <section class="view view-history" id="view-history" hidden>
+          <div class="results-head">
+            <h2 class="view-title">Facturas agregadas</h2>
+            <p class="view-sub" id="history-sub">Datos guardados en este dispositivo.</p>
+          </div>
+          <div class="invoices" id="invoice-list"></div>
+        </section>
+
+        <!-- Error de extraccion: se muestra dentro de la vista activa -->
+        <p class="error" id="error-line" hidden></p>
+      </main>
+
+      <footer class="foot">
+        <p class="foot-title">Privacidad por diseño</p>
+        <p class="foot-text">
+          Tu precio individual permanece en este dispositivo. Solo se intercambia la información
+          necesaria para calcular la referencia del grupo.
+        </p>
+      </footer>
     </div>
 
     <script type="module" src="app.js"></script>
