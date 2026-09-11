@@ -9,7 +9,10 @@
     "test:network": "node src/network/test-paridad-network.mjs",
     "test:e2e": "node src/network/test-aggregation-e2e.mjs",
     "demo": "node demo-local.mjs",
-    "ui": "npx -y serve -l 4173 ."
+    "ui": "npx -y serve -l 4173 .",
+    "demo:manual": "node demo-local.mjs --manual",
+    "demo:items": "node demo-items.mjs",
+    "test:demo": "node src/network/test-demo-facturas.mjs"
   },
   "keywords": [],
   "author": "",

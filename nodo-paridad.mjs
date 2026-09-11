@@ -67,6 +67,8 @@ const port = Number(argValue("--port") ?? 4700);
 const topicSeed = argValue("--topic");
 const bootstrapJson = argValue("--bootstrap");
 const withUi = !rest.includes("--no-ui");
+// --manual: no procesar al arrancar; esperar el boton de la UI.
+const manual = rest.includes("--manual");
 
 const facturas = rest.flatMap((arg, index) => (arg === "--factura" && rest[index + 1] ? [rest[index + 1]] : []));
 const carpeta = argValue("--carpeta") ?? null;
@@ -128,8 +130,28 @@ if (liveItems.length) runner.setItems(liveItems);
 // SDK de QVAC. El pipeline corre EN este proceso (no usa el servidor
 // http de QVAC) y tiene respaldo automatico a CPU si la GPU falla.
 
-let extraction = null; // estado para la UI; null = extraccion no activada
+// Ciclo de vida de `extraction.status` (lo pinta la UI tal cual):
+//   IDLE        hay facturas configuradas, esperando el disparo
+//   LOADING_AI  cargando los modelos QVAC en este dispositivo
+//   PROCESSING  extrayendo producto y precio de una factura
+//   READY       modelos cargados y en reposo (solo con --carpeta)
+//   DONE        cola inicial procesada y modelos liberados
+//   ERROR       el pipeline no arranco o fallo
+const hayFuenteDeFacturas = facturas.length > 0 || carpeta !== null;
+
+let extraction = hayFuenteDeFacturas
+  ? {
+      status: "IDLE",
+      currentFile: null,
+      steps: null,
+      processed: 0,
+      total: facturas.length,
+      folder: carpeta,
+      error: null,
+    }
+  : null; // null = este nodo no extrae facturas
 let extractionQueue = Promise.resolve();
+let extractionStarted = false;
 const processedFiles = new Set();
 
 function upsertItem(nuevo) {
@@ -140,14 +162,10 @@ function upsertItem(nuevo) {
 }
 
 async function startExtraction() {
-  extraction = {
-    status: "LOADING_AI", // LOADING_AI | READY | PROCESSING | ERROR
-    currentFile: null,
-    steps: null,
-    processed: 0,
-    folder: carpeta,
-    error: null,
-  };
+  if (!hayFuenteDeFacturas || extractionStarted) return;
+  extractionStarted = true;
+
+  extraction.status = "LOADING_AI";
   localAiStatus = "LOADING";
   broadcastUiState();
 
@@ -186,6 +204,24 @@ async function startExtraction() {
       });
       console.log(
         `   [ia] ${nombre}: "${resultado.product_canonical}" x${resultado.quantity} — precio extraido localmente (no se muestra en logs de red)`
+      );
+
+      // Evidencia auditable de que la factura paso por QVAC en ESTE
+      // dispositivo: backend real y tiempos de OCR/LLM. El precio NO se
+      // imprime a proposito -- en la demo local los tres stdout se mezclan
+      // en la misma terminal y ver los tres precios contradiria el relato.
+      // Cada nodo si expone el suyo en su propia UI (/api/state).
+      console.log(
+        `PARIDAD_EXTRACCION ${JSON.stringify({
+          nodo: selfName,
+          archivo: nombre,
+          product: resultado.product,
+          product_canonical: resultado.product_canonical,
+          quantity: resultado.quantity,
+          ocrBackend: resultado._local.ocrBackend,
+          msOcr: resultado._local.msOcr,
+          msLlm: resultado._local.msLlm,
+        })}`
       );
     } catch (err) {
       extraction.error = `${nombre}: ${err.message}`;
@@ -228,13 +264,27 @@ async function startExtraction() {
       );
     });
     console.log(`   [ia] vigilando carpeta de facturas: ${dir}`);
+  } else {
+    // Sin carpeta que vigilar, la IA ya no hace falta cuando termina la
+    // cola inicial. Liberar los modelos devuelve ~400 MB de RAM y, sobre
+    // todo, suelta la GPU: tres contextos OCR en Vulkan a la vez tumban
+    // el worker de QVAC en esta maquina (ver docs/pipeline-extraccion.md).
+    extractionQueue = extractionQueue.then(async () => {
+      const pipelineMod = await import("./src/extraction/invoice-pipeline.mjs");
+      await pipelineMod.unloadPipeline(sesion);
+      extraction.status = "DONE";
+      localAiStatus = "DONE";
+      broadcastUiState();
+      console.log(
+        `PARIDAD_EXTRACCION_LISTA ${JSON.stringify({ nodo: selfName, procesadas: extraction.processed })}`
+      );
+    });
   }
 }
 
-if (facturas.length || carpeta) {
-  // setImmediate: el resto del modulo (estado de UI, servidor) debe
-  // terminar de evaluarse antes de que la extraccion toque ese estado.
-  setImmediate(() => void startExtraction().catch((err) => {
+/** Punto unico de arranque de la extraccion (auto o desde la UI). */
+function dispararExtraccion() {
+  return startExtraction().catch((err) => {
     if (extraction) {
       extraction.status = "ERROR";
       extraction.error = err.message;
@@ -242,12 +292,25 @@ if (facturas.length || carpeta) {
     localAiStatus = "OFFLINE";
     broadcastUiState();
     console.error(`   💥 [ia] no se pudo iniciar el pipeline de extraccion: ${err.message}`);
-  }));
+  });
+}
+
+// Con --manual el nodo carga la red pero espera a que alguien pulse
+// "Procesar facturas" en su UI (POST /api/procesar). Sirve para conducir
+// la demo a mano; sin el flag arranca solo.
+if (hayFuenteDeFacturas && !manual) {
+  // setImmediate: el resto del modulo (estado de UI, servidor) debe
+  // terminar de evaluarse antes de que la extraccion toque ese estado.
+  setImmediate(() => void dispararExtraccion());
 }
 
 // --- chequeos de entorno (solo lectura, para las tiles de la UI) ------------
 
-let localAiStatus = "OFFLINE";
+// IDLE | LOADING | ACTIVE | DONE | OFFLINE.
+// Con facturas configuradas arranca en IDLE ("va a procesar"), no en
+// OFFLINE: decir OFFLINE mientras la IA local esta a punto de trabajar
+// -- o trabajando -- era justo lo contrario de lo que pasa.
+let localAiStatus = hayFuenteDeFacturas ? "IDLE" : "OFFLINE";
 let internetStatus = "OFFLINE";
 
 async function checkEnvironment() {
@@ -323,6 +386,10 @@ function buildUiState() {
       expectedPeerCount: netState.expectedPeerCount,
     },
     localAi: { status: localAiStatus, model: "qwen3-600m-inst-q4" },
+    // Indicador honesto y estatico: Paridad no tiene ninguna ruta hacia un
+    // servicio de inferencia externo. No se deduce del estado de internet,
+    // que es otra cosa distinta y confundia al leer la cabecera.
+    cloudAi: { used: false },
     internet: { status: internetStatus },
     privacy: {
       sharesExchanged: round.sharesSent,
@@ -380,6 +447,20 @@ if (withUi) {
     if (pathname === "/api/state") {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify(buildUiState()));
+      return;
+    }
+
+    // Disparo manual de la extraccion desde el boton de la UI. Es
+    // idempotente: startExtraction() ignora las llamadas repetidas.
+    if (pathname === "/api/procesar") {
+      if (!hayFuenteDeFacturas) {
+        res.writeHead(409, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "Este nodo no tiene facturas configuradas" }));
+        return;
+      }
+      void dispararExtraccion();
+      res.writeHead(202, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
       return;
     }
 

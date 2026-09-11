@@ -54,8 +54,8 @@
           <span class="status-value" id="st-ai">&mdash;</span>
         </div>
         <div class="status-chip">
-          <span class="status-label">Internet</span>
-          <span class="status-value" id="st-internet">&mdash;</span>
+          <span class="status-label">Cloud AI</span>
+          <span class="status-value" id="st-cloud">&mdash;</span>
         </div>
         <div class="status-chip">
           <span class="status-label">Shares enviados</span>
@@ -65,6 +65,80 @@
 
       <div class="main-grid">
         <div class="col-left">
+          <section class="panel flow-panel" id="flow-panel" aria-label="Recorrido de tu factura">
+            <div class="panel-heading">
+              <h2 class="panel-title">El recorrido de tu factura</h2>
+              <p class="panel-sub">
+                Todo lo de la izquierda ocurre en este dispositivo. Solo lo de la derecha cruza la red.
+              </p>
+            </div>
+
+            <ol class="flow-steps" id="flow-steps">
+              <li class="flow-step" data-step="factura">
+                <span class="flow-mark"></span>
+                <span class="flow-text"><b>Factura</b><span class="flow-sub" id="flow-factura">&mdash;</span></span>
+              </li>
+              <li class="flow-step" data-step="ia">
+                <span class="flow-mark"></span>
+                <span class="flow-text"><b>IA local</b><span class="flow-sub" id="flow-ia">&mdash;</span></span>
+              </li>
+              <li class="flow-step" data-step="precio">
+                <span class="flow-mark"></span>
+                <span class="flow-text"><b>Precio protegido</b><span class="flow-sub" id="flow-precio">&mdash;</span></span>
+              </li>
+              <li class="flow-step" data-step="p2p">
+                <span class="flow-mark"></span>
+                <span class="flow-text"><b>Red P2P</b><span class="flow-sub" id="flow-p2p">&mdash;</span></span>
+              </li>
+              <li class="flow-step" data-step="agregacion">
+                <span class="flow-mark"></span>
+                <span class="flow-text"><b>Agregación privada</b><span class="flow-sub" id="flow-agg">&mdash;</span></span>
+              </li>
+              <li class="flow-step" data-step="resultado">
+                <span class="flow-mark"></span>
+                <span class="flow-text"><b>Referencia del grupo</b><span class="flow-sub" id="flow-res">&mdash;</span></span>
+              </li>
+            </ol>
+
+            <button class="flow-btn" id="procesar-btn" type="button" hidden>Procesar facturas</button>
+
+            <div class="flow-bottom">
+              <div class="flow-result" id="flow-result" hidden>
+                <div class="flow-result-head" id="flow-result-product">&mdash;</div>
+                <div class="flow-result-grid">
+                  <div>
+                    <span class="flow-result-lbl">Tu precio</span>
+                    <span class="flow-result-val" id="flow-result-mine">&mdash;</span>
+                  </div>
+                  <div>
+                    <span class="flow-result-lbl">Referencia del grupo</span>
+                    <span class="flow-result-val" id="flow-result-group">&mdash;</span>
+                  </div>
+                  <div>
+                    <span class="flow-result-lbl">Tu posición</span>
+                    <span class="flow-result-val" id="flow-result-pos">&mdash;</span>
+                  </div>
+                </div>
+                <p class="flow-result-note" id="flow-result-note">&mdash;</p>
+              </div>
+
+              <figure class="p2p-figure">
+                <svg viewBox="0 0 120 104" width="120" height="104" aria-hidden="true">
+                  <line id="edge-self-1" class="p2p-edge" x1="24" y1="80" x2="96" y2="80" />
+                  <line id="edge-self-2" class="p2p-edge" x1="24" y1="80" x2="60" y2="20" />
+                  <line id="edge-far" class="p2p-edge p2p-edge-unknown" x1="96" y1="80" x2="60" y2="20" />
+                  <circle id="node-self" class="p2p-node p2p-node-self" cx="24" cy="80" r="9" />
+                  <circle id="node-1" class="p2p-node" cx="96" cy="80" r="9" />
+                  <circle id="node-2" class="p2p-node" cx="60" cy="20" r="9" />
+                  <text id="label-self" class="p2p-label" x="24" y="84">A</text>
+                  <text id="label-1" class="p2p-label" x="96" y="84">B</text>
+                  <text id="label-2" class="p2p-label" x="60" y="24">C</text>
+                </svg>
+                <figcaption id="p2p-caption">&mdash;</figcaption>
+              </figure>
+            </div>
+          </section>
+
           <section class="panel top5-panel" aria-label="Lo que mas compras">
             <div class="panel-heading">
               <h2 class="panel-title">Lo que más compras</h2>

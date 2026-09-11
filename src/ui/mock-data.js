@@ -15,8 +15,12 @@ const MOCK_STATE = Object.freeze({
   },
 
   localAi: {
-    status: "ACTIVE", // ACTIVE | LOADING | OFFLINE
+    status: "ACTIVE", // IDLE | LOADING | ACTIVE | DONE | OFFLINE
     model: "qwen3-600m-inst-q4",
+  },
+
+  cloudAi: {
+    used: false, // Paridad no tiene ruta hacia inferencia externa
   },
 
   internet: {

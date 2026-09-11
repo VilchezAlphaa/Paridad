@@ -19,6 +19,12 @@ import { NETWORK_STATE } from "./network-state.mjs";
 
 export { NETWORK_STATE };
 
+// Auditoria opcional del cable. Con PARIDAD_WIRE_AUDIT=1 el nodo imprime
+// CADA mensaje que pone en la red, tal cual se serializa. Sirve para
+// demostrar -- en la demo o en los tests -- que por ahi no viaja ningun
+// precio ni nada del contenido de las facturas. Apagada por defecto.
+const AUDITORIA_DE_CABLE = process.env.PARIDAD_WIRE_AUDIT === "1";
+
 function rawConnectedStateName(rawConnectedCount) {
   return `${rawConnectedCount}_PEERS_CONNECTED`;
 }
@@ -174,7 +180,9 @@ export class ParidadNetwork extends EventEmitter {
 
   _write(conn, message) {
     try {
-      conn.write(JSON.stringify(message) + "\n");
+      const serializado = JSON.stringify(message);
+      if (AUDITORIA_DE_CABLE) console.log(`PARIDAD_WIRE ${serializado}`);
+      conn.write(serializado + "\n");
       return true;
     } catch (err) {
       this.emit("error", new Error(`No se pudo escribir en la conexion: ${err.message}`));

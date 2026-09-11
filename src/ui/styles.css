@@ -217,6 +217,25 @@ header {
   min-height: 0;
 }
 
+/* #app tiene altura fija y overflow:hidden (dashboard sin scroll de
+   pagina). Al anadir el panel del recorrido, el resto del contenido de la
+   columna izquierda quedaba recortado y sin forma de alcanzarlo. Con esto
+   la pagina sigue sin barra de scroll, pero la columna si desplaza cuando
+   su contenido no cabe. */
+.col-left {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.col-left::-webkit-scrollbar {
+  width: 6px;
+}
+
+.col-left::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+}
+
 .panel {
   background: var(--glass);
   backdrop-filter: blur(28px) saturate(1.2);
@@ -847,4 +866,220 @@ header {
   .kpi-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* --- Panel "El recorrido de tu factura" ---------------------------------
+   Pinta el flujo real del nodo local: lo que ya paso (done), lo que esta
+   pasando (active) y lo que falta. Los estados los decide app.js con el
+   estado que publica nodo-paridad.mjs, nunca la propia hoja de estilos. */
+
+.flow-panel {
+  margin-bottom: 18px;
+}
+
+.flow-steps {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.flow-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 5px 4px;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.flow-step[data-state="active"] {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.flow-mark {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0.32;
+  position: relative;
+}
+
+.flow-step[data-state="done"] .flow-mark {
+  opacity: 1;
+  background: currentColor;
+}
+
+.flow-step[data-state="done"] .flow-mark::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1.5px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--bg, #12100e);
+  border-width: 0 1.8px 1.8px 0;
+  transform: rotate(42deg);
+}
+
+.flow-step[data-state="active"] .flow-mark {
+  opacity: 1;
+  animation: flow-pulse 1.1s ease-in-out infinite;
+}
+
+.flow-step[data-state="error"] .flow-mark {
+  opacity: 1;
+  border-color: #e0715f;
+  background: #e0715f;
+}
+
+@keyframes flow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 0.9; }
+  50% { box-shadow: 0 0 0 4px transparent; opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-step[data-state="active"] .flow-mark { animation: none; }
+}
+
+.flow-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.flow-step[data-state=""] .flow-text,
+.flow-step:not([data-state]) .flow-text {
+  opacity: 0.5;
+}
+
+.flow-sub {
+  font-size: 11.5px;
+  opacity: 0.72;
+}
+
+.flow-btn {
+  margin-top: 12px;
+  padding: 9px 18px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.flow-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.flow-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.flow-bottom {
+  display: flex;
+  gap: 18px;
+  align-items: flex-end;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.flow-result {
+  flex: 1 1 320px;
+  padding: 12px 14px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.flow-result-head {
+  font-weight: 600;
+  font-size: 13.5px;
+  margin-bottom: 8px;
+}
+
+.flow-result-grid {
+  display: flex;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+
+.flow-result-lbl {
+  display: block;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.flow-result-val {
+  display: block;
+  font-size: 19px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.flow-result-val[data-tone="over"] { color: #e0a05f; }
+.flow-result-val[data-tone="good"] { color: #7fc7a4; }
+
+.flow-result-note {
+  margin: 9px 0 0;
+  font-size: 11.5px;
+  opacity: 0.72;
+}
+
+.p2p-figure {
+  margin: 0;
+  flex: none;
+  text-align: center;
+}
+
+.p2p-figure figcaption {
+  font-size: 10.5px;
+  opacity: 0.62;
+  max-width: 150px;
+  margin-top: 2px;
+}
+
+.p2p-edge {
+  stroke: currentColor;
+  stroke-width: 1.6;
+  opacity: 0.16;
+}
+
+.p2p-edge.on {
+  opacity: 0.75;
+}
+
+/* La arista entre los OTROS dos participantes se deja siempre tenue: este
+   nodo no puede saber si estan conectados entre si. */
+.p2p-edge-unknown {
+  stroke-dasharray: 3 3;
+}
+
+.p2p-node {
+  fill: currentColor;
+  opacity: 0.22;
+}
+
+.p2p-node.on,
+.p2p-node-self {
+  opacity: 0.85;
+}
+
+.p2p-label {
+  font-size: 8.5px;
+  font-weight: 700;
+  text-anchor: middle;
+  fill: var(--bg, #12100e);
 }

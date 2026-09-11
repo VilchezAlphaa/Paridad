@@ -49,7 +49,8 @@ Ningún precio individual cruza la red en ningún momento. La matemática está 
 
 ```text
 nodo-paridad.mjs            ← proceso de UNA laptop: red + ronda + UI local (SSE)
-demo-local.mjs              ← ensayo de la demo con 3 nodos en una sola máquina
+demo-local.mjs              ← DEMO DE PRODUCTO: 3 nodos, facturas reales por QVAC
+demo-items.mjs              ← demo de red con 5 productos por CLI (sin OCR)
 p2p-privacy-test.mjs        ← spike original del protocolo sobre Hyperswarm (validado)
 nodo-a.mjs / nodo-b.mjs     ← spike original de comunicación bidireccional
 qvac.config.json            ← config del servidor QVAC local (modelo qwen3-600m-inst-q4)
@@ -102,14 +103,29 @@ node nodo-paridad.mjs C --price 5200 --product "Aceite Motor 20W50" --quantity 6
 - Si un peer se cae a mitad de ronda, los demás lo detectan (estado
   `PEER_DISCONNECTED`) y al volver **todos reinician la ronda con shares frescos**.
 
-### Ensayo en una sola máquina
+### Demo de producto en una sola máquina
 
 ```bash
 npm run demo
 # UI del nodo A: http://localhost:4700  (B: 4701, C: 4702)
 ```
 
-Levanta un DHT local (testnet de hyperdht) y los 3 nodos completos en esta máquina.
+El flujo completo y real: cada nodo extrae **su** factura de
+`demo-data/facturas/` con QVAC local (OCR + estructuración) y el precio sale
+de ahí, no de datos precargados. Levanta además un DHT local para el
+descubrimiento.
+
+Las facturas se procesan **una detrás de otra**: tres OCR simultáneos en
+Vulkan tumban el worker de QVAC en esta máquina, así que cada nodo libera los
+modelos antes de que arranque el siguiente.
+
+```bash
+npm run demo:manual   # espera a que pulses «Procesar facturas» en cada UI
+npm run demo:items    # demo de red con 5 productos por CLI, sin OCR
+```
+
+Detalle completo en [docs/demo.md](docs/demo.md).
+
 Nota: entre procesos de una misma máquina la convergencia puede tardar
 15–60 s por quirks de red local; entre laptops distintas conecta directo.
 
@@ -120,7 +136,11 @@ npm test                # todo: privacidad + red + end-to-end
 npm run test:privacy    # secret sharing (100 casos) + protocolo de agregación
 npm run test:network    # capa de red con 3 procesos reales sobre DHT local
 npm run test:e2e        # ronda completa: los 3 nodos calculan el mismo promedio
+npm run test:demo       # demo de producto con QVAC real (~1,5 min, necesita modelos)
 ```
+
+`npm test` no incluye `test:demo` a propósito: ese necesita los modelos de
+QVAC y no debe hacer fallar la batería normal en una máquina sin ellos.
 
 ### UI sola (sin red, datos mock)
 
